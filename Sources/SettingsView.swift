@@ -259,29 +259,6 @@ private struct ClaudeTab: View {
             }
 
             Section {
-                Toggle("Speak out loud", isOn: $settings.speakAloud)
-                Toggle("Also say when work starts", isOn: $settings.announceStart)
-                    .disabled(!settings.speakAloud)
-            } header: {
-                Text("Voice")
-            } footer: {
-                Text("Uses your Mac's built-in voice. It says when Claude or Cursor finishes, when Claude needs your OK, and its lines when you click it.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent("Talk to it", value: "Double-click the buddy or press \(HotKey.defaultLabel)")
-                Toggle("Do anything I ask (uses Cursor's agent or Claude Code)", isOn: $settings.assistantActions)
-            } header: {
-                Text("Voice assistant")
-            } footer: {
-                Text(settings.assistantActions
-                     ? "Anything Buddy doesn't know how to do goes to Cursor's agent (or Claude Code), which can run commands, control apps and change files without asking first. It uses your Cursor plan. Speech can be misheard, so turn this off if you're unsure."
-                     : "Free: say things like \"open Safari\", \"search for cats\", \"volume up\" or \"set a timer for 5 minutes\". Questions are answered by Apple's on-device AI (macOS 26 with Apple Intelligence), or by Claude Code or Cursor if installed.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section {
                 TextField("Only follow projects containing", text: $settings.projectFilter,
                           prompt: Text("All projects"))
                 LabeledContent("Right now", value: status)

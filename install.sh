@@ -26,5 +26,4 @@ if [ -d "$HOME/.cursor" ] && [ -x /usr/bin/python3 ]; then
 fi
 
 open "$DEST"
-echo "Mac Buddy is running. Double-click it (or press Control-Option-B) to talk to it."
-echo "Right-click it for options, or open it again for Settings."
+echo "Mac Buddy is running. Right-click it for options, or open it again for Settings."

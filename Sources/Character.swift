@@ -132,7 +132,7 @@ struct CharacterView: View {
     let style: BuddyStyle
     /// Antenna color while working (Claude orange / Cursor blue); nil keeps the default.
     var agentTint: Color? = nil
-    /// Which agent's mark goes on the laptop screen (a generic pointer for Cursor).
+    /// Which agent's mark goes on the laptop screen (a code symbol for Cursor).
     var screenAgent: Agent? = nil
 
     private var limb: Color { style.limb.color }
@@ -627,58 +627,30 @@ struct BuddyView: View {
     @ObservedObject var model: BuddyModel
     @ObservedObject var settings: BuddySettings
 
-    /// Turns the whole buddy blue for Cursor; Claude keeps your chosen colors.
+    /// Turns the whole buddy blue (with headphones) for Cursor; Claude keeps your chosen look.
     static func themed(_ style: BuddyStyle, for agent: Agent?) -> BuddyStyle {
         guard agent == .cursor else { return style }
         var s = style
         s.body = Agent.cursorBody
         s.limb = Agent.cursorLimb
-        if s.accessory == .none { s.accessory = .headphones }   // coding mode
+        if s.accessory == .none { s.accessory = .headphones }
         return s
-    }
-
-    /// While you're chatting, look busy when thinking and calm otherwise.
-    static func displayMood(_ mood: Mood, voice: VoiceState) -> Mood {
-        switch voice {
-        case .off: return mood
-        case .thinking: return .working
-        case .listening(_), .answering(_): return .idle
-        }
-    }
-
-    static func voiceBubble(_ voice: VoiceState) -> BubbleInfo? {
-        switch voice {
-        case .off:
-            return nil
-        case .listening(let heard):
-            let text = heard.isEmpty ? "Listening…" : "…" + String(heard.suffix(30))
-            return BubbleInfo(text: text, icon: "mic.fill", tint: .red)
-        case .thinking:
-            return BubbleInfo(text: "Thinking…", spinner: true)
-        case .answering(let answer):
-            let text = answer.count > 40 ? String(answer.prefix(38)) + "…" : answer
-            return BubbleInfo(text: text, icon: "bubble.left.fill", tint: Palette.accent)
-        }
     }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 40)) { timeline in
             let now = timeline.date
             let t = now.timeIntervalSinceReferenceDate * settings.animationSpeed
-            let bubble = Self.voiceBubble(model.voice)
-                ?? model.activePhrase(at: now).map { BubbleInfo(text: $0) }
+            let bubble = model.activePhrase(at: now).map { BubbleInfo(text: $0) }
                 ?? BuddyStack.bubble(for: model.mood, projects: model.projects, settings: settings,
                                      agents: model.agents, doneAgent: model.doneAgent)
-            let mood = Self.displayMood(model.mood, voice: model.voice)
             // With both agents busy, the antenna takes turns between their colors.
             let agents = model.agents
             let tint: Color? = agents.isEmpty ? nil
                 : agents[Int(now.timeIntervalSinceReferenceDate / 1.5) % agents.count].tint
-            BuddyStack(bubble: bubble, mood: mood, t: t, reaction: model.reaction(at: now),
-                       style: Self.themed(settings.style(look: model.cursorLook),
-                                          for: model.voice.isActive ? nil : model.themeAgent),
-                       agentTint: model.voice == .thinking ? Optional(Agent.claude.tint) : tint,
-                       screenAgent: model.voice.isActive ? nil : model.themeAgent)
+            BuddyStack(bubble: bubble, mood: model.mood, t: t, reaction: model.reaction(at: now),
+                       style: Self.themed(settings.style(look: model.cursorLook), for: model.themeAgent),
+                       agentTint: tint, screenAgent: model.themeAgent)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,

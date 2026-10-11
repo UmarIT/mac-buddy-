@@ -28,7 +28,7 @@ enum Agent: Equatable {
     /// A generic SF Symbol shown in the bubble (not a brand logo).
     var icon: String { self == .cursor ? "cursorarrow.rays" : "sparkle" }
 
-    /// Whole-body colors while this agent is working or in front (Claude keeps your own colors).
+    /// Whole-body colors for Cursor (Claude keeps your own colors).
     static let cursorBody = RGB(hex: "4A8FE7")!
     static let cursorLimb = RGB(hex: "2F67B8")!
 
@@ -75,8 +75,6 @@ final class BuddyModel: ObservableObject {
     @Published private(set) var doneAgent: Agent = .claude
     /// Cursor when it's the app you're using right now, else nil.
     @Published private(set) var focusAgent: Agent?
-    /// Voice conversation with you (listening / thinking / answering).
-    @Published private(set) var voice: VoiceState = .off
 
     /// Pupil offset toward the cursor, updated by the app delegate.
     var cursorLook = CGSize.zero
@@ -147,9 +145,6 @@ final class BuddyModel: ObservableObject {
             }
             newestStopSeen = newestStop
             if doneAgent != newestStopAgent { doneAgent = newestStopAgent }
-            if settings.speakAloud, voice == .off, now.timeIntervalSince(newestStop) < 5 {
-                Speaker.shared.say("\(newestStopAgent.name) is done!")
-            }
         }
 
         let newMood: Mood
@@ -172,17 +167,6 @@ final class BuddyModel: ObservableObject {
             let name = ((ev.cwd ?? "") as NSString).lastPathComponent
             if !name.isEmpty, !newProjects.contains(name) { newProjects.append(name) }
         }
-        if settings.speakAloud, voice == .off, newMood != mood {
-            if newMood == .attention {
-                Speaker.shared.say("Claude needs your OK!")
-            } else if newMood == .working, mood != .attention, settings.announceStart, let lead = newAgents.first {
-                if let project = newProjects.first {
-                    Speaker.shared.say("\(lead.name) is working on \(project)")
-                } else {
-                    Speaker.shared.say("\(lead.name) is working")
-                }
-            }
-        }
         if mood != newMood { mood = newMood }
         if projects != newProjects { projects = newProjects }
         if agents != newAgents { agents = newAgents }
@@ -200,11 +184,6 @@ final class BuddyModel: ObservableObject {
         if let working = agents.first { return working }
         if mood == .done { return doneAgent }
         return focusAgent
-    }
-
-    func setVoice(_ state: VoiceState) {
-        if voice != state { voice = state }
-        lastActivity = Date()   // a chat keeps the buddy awake
     }
 
     /// Called when the buddy is clicked.
@@ -235,7 +214,6 @@ final class BuddyModel: ObservableObject {
                      "I believe in you!", "*happy wiggle*", "What are we building?"]
         }
         phrase = lines.randomElement()
-        if settings.speakAloud, let phrase { Speaker.shared.say(phrase) }
         phraseUntil = now.addingTimeInterval(2.5)
     }
 

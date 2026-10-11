@@ -75,8 +75,6 @@ enum ClaudeHooks {
         #!/bin/sh
         # Forwards Claude Code hook events to Mac Buddy. Rewritten each time Mac Buddy launches.
         BIN="\(binary)"
-        # Skip the buddy's own voice-assistant requests so it doesn't react to itself.
-        [ -n "$MAC_BUDDY_ASSISTANT" ] && { cat >/dev/null; exit 0; }
         [ -x "$BIN" ] && exec "$BIN" --hook
         cat >/dev/null
         exit 0

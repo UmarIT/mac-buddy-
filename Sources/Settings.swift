@@ -131,11 +131,6 @@ final class BuddySettings: ObservableObject {
     @Published var hideWhenIdle = false { didSet { save(hideWhenIdle, "hideWhenIdle") } }
     @Published var projectFilter = "" { didSet { save(projectFilter, "projectFilter") } }
 
-    // Voice
-    @Published var speakAloud = true { didSet { save(speakAloud, "speakAloud") } }
-    @Published var announceStart = false { didSet { save(announceStart, "announceStart") } }
-    @Published var assistantActions = false { didSet { save(assistantActions, "assistantActions") } }
-
     private static let prefix = "buddy."
 
     init() { load() }
@@ -165,9 +160,6 @@ final class BuddySettings: ObservableObject {
         celebrate = v("celebrate", true)
         hideWhenIdle = v("hideWhenIdle", false)
         projectFilter = v("projectFilter", "")
-        speakAloud = v("speakAloud", true)
-        announceStart = v("announceStart", false)
-        assistantActions = v("assistantActions", false)
     }
 
     func resetToDefaults() {

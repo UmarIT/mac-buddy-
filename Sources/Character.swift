@@ -138,12 +138,18 @@ struct CharacterView: View {
     var screenAgent: Agent? = nil
     /// How it reacts to what you're listening to (only while otherwise idle).
     var vibe: Vibe? = nil
+    /// Do just this one work activity (e.g. reading the news) instead of the usual routine.
+    var fixedActivity: WorkActivity? = nil
 
     private var limb: Color { style.limb.color }
 
     /// What the buddy is busy with while Claude works; nil otherwise (a tap reaction takes over).
     private var work: WorkState? {
-        mood == .working && reaction == nil ? WorkSchedule.state(at: t) : nil
+        guard mood == .working, reaction == nil else { return nil }
+        if let fixedActivity {
+            return WorkState(activity: fixedActivity, local: t.truncatingRemainder(dividingBy: WorkSchedule.slot), presence: 1)
+        }
+        return WorkSchedule.state(at: t)
     }
 
     var body: some View {
@@ -609,6 +615,26 @@ struct CharacterView: View {
                 }
             }
         }
+        if mood == .idle, case .browse(let kind, _)? = vibe, kind != .news, kind != .learning, kind != .search {
+            if kind == .social || kind == .chat {
+                // Likes and messages pop up now and then.
+                let phase = (t * 0.5).truncatingRemainder(dividingBy: 1)
+                Image(systemName: kind == .chat ? "ellipsis.bubble.fill" : (Int(t * 0.5) % 2 == 0 ? "hand.thumbsup.fill" : "heart.fill"))
+                    .font(.system(size: 13 + phase * 5, weight: .bold))
+                    .foregroundStyle(kind == .chat ? Color(red: 0.2, green: 0.75, blue: 0.4)
+                                     : (Int(t * 0.5) % 2 == 0 ? Color(red: 0.2, green: 0.5, blue: 0.95) : Color(red: 1, green: 0.35, blue: 0.5)))
+                    .opacity(sin(phase * .pi))
+                    .offset(x: 50, y: -10 - phase * 40)
+            } else {
+                Image(systemName: kind.icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(kind == .money ? Color(red: 0.2, green: 0.65, blue: 0.3)
+                                     : kind == .food ? Color(red: 0.9, green: 0.5, blue: 0.2)
+                                     : Color(red: 0.3, green: 0.55, blue: 0.95))
+                    .rotationEffect(.degrees(kind == .travel ? 45 + sin(t * 2) * 10 : sin(t * 2) * 8))
+                    .offset(x: kind == .travel ? 50 + sin(t * 1.2) * 10 : 54, y: -6 + sin(t * 3) * 6)
+            }
+        }
         if mood == .idle, vibe == .sad {
             // A tear rolls down now and then.
             let phase = (t * 0.33).truncatingRemainder(dividingBy: 1)
@@ -656,6 +682,7 @@ struct BuddyStack: View {
     var agentTint: Color? = nil
     var screenAgent: Agent? = nil
     var vibe: Vibe? = nil
+    var fixedActivity: WorkActivity? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -669,7 +696,7 @@ struct BuddyStack: View {
             .animation(.spring(duration: 0.3, bounce: 0.4), value: bubble)
 
             CharacterView(mood: mood, t: t, reaction: reaction, style: style, agentTint: agentTint,
-                          screenAgent: screenAgent, vibe: vibe)
+                          screenAgent: screenAgent, vibe: vibe, fixedActivity: fixedActivity)
         }
         .frame(width: BuddyLayout.window.width, height: BuddyLayout.window.height, alignment: .bottom)
     }
@@ -707,6 +734,16 @@ struct BuddyView: View {
     @ObservedObject var model: BuddyModel
     @ObservedObject var settings: BuddySettings
 
+    /// nil: not a working reaction. .some(nil): the usual work routine. .some(x): just activity x.
+    static func activity(for vibe: Vibe?) -> WorkActivity?? {
+        switch vibe {
+        case .work(_)?: return .some(nil)
+        case .browse(.news, _)?, .browse(.learning, _)?: return .some(.reading)
+        case .browse(.search, _)?: return .some(.thinking)
+        default: return nil
+        }
+    }
+
     static func vibeBubble(_ vibe: Vibe?, title: String?) -> BubbleInfo? {
         guard let vibe else { return nil }
         let song = title.map { $0.count > 30 ? String($0.prefix(28)) + "…" : $0 } ?? ""
@@ -727,6 +764,23 @@ struct BuddyView: View {
                               tint: Color(red: 0.2, green: 0.65, blue: 0.3))
         case .work(let place):
             return BubbleInfo(text: "Working · \(place)", icon: "laptopcomputer", tint: Palette.accent, spinner: true)
+        case .browse(let kind, let name):
+            let short = name.count > 24 ? String(name.prefix(22)) + "…" : name
+            let text: String = switch kind {
+            case .social: "Scrolling \(short)"
+            case .chat: "Chatting on \(short)"
+            case .shopping: "Shopping on \(short)!"
+            case .news: "Reading the news"
+            case .learning: "Learning · \(short)"
+            case .search: short.isEmpty ? "Searching…" : "Searching: \(short)"
+            case .food: "Yum! Ordering food?"
+            case .movie: "Movie time!"
+            case .travel: "Planning a trip?"
+            case .money: "Money stuff · \(short)"
+            case .games: "Game time!"
+            case .other: "Browsing \(short)"
+            }
+            return BubbleInfo(text: text, icon: kind.icon, tint: Color(red: 0.3, green: 0.55, blue: 0.95))
         }
     }
 
@@ -752,14 +806,13 @@ struct BuddyView: View {
             let agents = model.agents
             let tint: Color? = agents.isEmpty ? nil
                 : agents[Int(now.timeIntervalSinceReferenceDate / 1.5) % agents.count].tint
-            // A work tab or app in front: the buddy works along with you.
-            let workingWithYou: Bool = {
-                if model.mood == .idle, case .work(_)? = model.vibe { return true }
-                return false
-            }()
-            BuddyStack(bubble: bubble, mood: workingWithYou ? .working : model.mood, t: t, reaction: model.reaction(at: now),
+            // A work tab or app in front: the buddy works along with you; news and
+            // learning sites make it read, a search makes it think.
+            let activity = model.mood == .idle ? Self.activity(for: model.vibe) : nil
+            BuddyStack(bubble: bubble, mood: activity != nil ? .working : model.mood, t: t, reaction: model.reaction(at: now),
                        style: Self.themed(settings.style(look: model.cursorLook), for: model.themeAgent),
-                       agentTint: tint, screenAgent: model.themeAgent, vibe: workingWithYou ? nil : model.vibe)
+                       agentTint: tint, screenAgent: model.themeAgent, vibe: activity != nil ? nil : model.vibe,
+                       fixedActivity: activity ?? nil)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,
@@ -821,6 +874,61 @@ extension CharacterView {
             p.antenna = Color(red: 0.3, green: 0.85, blue: 0.4)
         case .work(_):
             break   // drawn as the regular "working" routine
+        case .browse(let kind, _):
+            switch kind {
+            case .social, .chat:
+                // Thumb flicking through a feed, eyes down.
+                p.look = CGSize(width: 1, height: 3)
+                p.rightArm = 48 + sin(t * 7) * 9
+                p.leftArm = 14
+                p.tilt = 2
+                p.mouth = sin(t * 0.8) > 0.5 ? .grin : .smile
+            case .shopping:
+                p.lift = abs(sin(t * 4)) * 6
+                p.leftArm = 110 + sin(t * 8) * 15
+                p.rightArm = -30
+                p.eyes = .happy
+                p.mouth = .grin
+                p.eyeScale = 1.1
+            case .food:
+                p.mouth = sin(t * 3) > 0 ? .oh : .grin
+                p.leftArm = -55 + sin(t * 4) * 8      // rubbing tummy
+                p.rightArm = 55 - sin(t * 4) * 8
+                p.eyes = sin(t * 1.5) > 0.6 ? .happy : .open(1)
+                p.tilt = sin(t * 2) * 3
+            case .movie:
+                p.eyeScale = 1.15
+                p.look = CGSize(width: 0, height: -1)
+                p.rightArm = 70 + max(0, sin(t * 2)) * 30    // popcorn to mouth
+                p.leftArm = 10
+                p.mouth = sin(t * 2) > 0.8 ? .oh : .smile
+            case .travel:
+                p.tilt = sin(t * 1.5) * 7
+                p.leftArm = 90 + sin(t * 1.5) * 25      // arms out like wings
+                p.rightArm = -90 + sin(t * 1.5) * 25
+                p.lift = 3 + sin(t * 3) * 2
+                p.eyes = .happy
+                p.mouth = .grin
+            case .money:
+                p.mouth = .focus
+                p.eyeScale = 0.95
+                p.look = CGSize(width: sin(t * 1.2) * 3, height: 1)
+                p.rightArm = 72 + sin(t * 7) * 5
+            case .games:
+                p.lift = abs(sin(t * 6)) * 4
+                p.leftArm = -45 + sin(t * 20) * 10       // button mashing
+                p.rightArm = 45 + sin(t * 20 + 1) * 10
+                p.eyes = sin(t * 2) > 0.7 ? .happy : .open(1)
+                p.eyeScale = 1.1
+                p.mouth = .grin
+            case .news, .learning, .search:
+                break   // drawn as reading / thinking
+            case .other:
+                // Curious: looking around the page.
+                p.look = CGSize(width: sin(t * 0.9) * 3.5, height: cos(t * 1.3) * 2)
+                p.tilt = sin(t * 0.7) * 4
+                p.mouth = .smile
+            }
         case .sad:
             p.squash = 0.97 + 0.01 * sin(t * 0.8)
             p.tilt = sin(t * 0.8) * 3

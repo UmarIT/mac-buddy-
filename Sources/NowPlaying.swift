@@ -32,6 +32,28 @@ enum Sport: Equatable {
     }
 }
 
+/// Kinds of websites the buddy reacts to.
+enum SiteKind: Equatable {
+    case social, chat, shopping, news, learning, search, food, movie, travel, money, games, other
+
+    var icon: String {
+        switch self {
+        case .social: "hand.thumbsup.fill"
+        case .chat: "bubble.left.and.bubble.right.fill"
+        case .shopping: "bag.fill"
+        case .news: "newspaper.fill"
+        case .learning: "graduationcap.fill"
+        case .search: "magnifyingglass"
+        case .food: "fork.knife"
+        case .movie: "popcorn.fill"
+        case .travel: "airplane"
+        case .money: "dollarsign.circle.fill"
+        case .games: "gamecontroller.fill"
+        case .other: "globe"
+        }
+    }
+}
+
 /// How the buddy reacts to what you're doing.
 enum Vibe: Equatable {
     case quran          // still, eyes closed, listening respectfully
@@ -41,6 +63,7 @@ enum Vibe: Equatable {
     case groove         // nodding along
     case sport(Sport)   // watching excitedly, cheering now and then
     case work(String)   // typing on its laptop; the name of the site or app
+    case browse(SiteKind, String)   // reacting to the website in front; its name
 }
 
 /// What the buddy noticed: a title to show in the bubble, and how to react.
@@ -144,6 +167,7 @@ enum NowPlaying {
         }
 
         var work: Activity?
+        var browsing: Activity?
         for line in lines where line.first == "TAB" && line.count >= 4 {
             let isFront = line[1] == "FRONT"
             let title = cleanTitle(line[2])
@@ -157,8 +181,12 @@ enum NowPlaying {
             if isFront, work == nil, let site = workSite(url: url, title: title) {
                 work = Activity(title: site, vibe: .work(site))
             }
+            if isFront, browsing == nil, let site = siteKind(url: url, title: line[2]) {
+                browsing = Activity(title: site.1, vibe: .browse(site.0, site.1))
+            }
         }
         if let work { return work }
+        if let browsing { return browsing }
         return frontWorkApp.map { Activity(title: $0, vibe: .work($0)) }
     }
 
@@ -251,6 +279,80 @@ enum NowPlaying {
             ("firebase.google.com", "Firebase"), ("calendar.google.com", "Calendar"),
         ]
         return sites.first { url.contains($0.0) }?.1
+    }
+
+    /// What kind of website this is, and a friendly name for the bubble.
+    private static func siteKind(url: String, title: String) -> (SiteKind, String)? {
+        guard let parsed = URL(string: url), let rawHost = parsed.host?.lowercased(),
+              ["http", "https"].contains(parsed.scheme ?? "") else { return nil }   // skip new tabs, settings pages
+        let host = rawHost.hasPrefix("www.") ? String(rawHost.dropFirst(4)) : rawHost
+        let path = parsed.path.lowercased()
+        func on(_ domain: String) -> Bool {
+            domain.hasSuffix(".") ? host.contains(domain) : (host == domain || host.hasSuffix("." + domain))
+        }
+
+        // Searches: "biryani recipe - Google Search" → "biryani recipe"
+        if (on("google.") && path.hasPrefix("/search")) || (on("bing.com") && path.hasPrefix("/search"))
+            || on("duckduckgo.com") || on("perplexity.ai") {
+            var q = title
+            for suffix in [" - Google Search", " - Search", " at DuckDuckGo", " - Bing", " - Perplexity"] where q.hasSuffix(suffix) {
+                q = String(q.dropLast(suffix.count))
+            }
+            return (.search, q)
+        }
+        if (on("google.") && path.hasPrefix("/maps")) || on("maps.google.") { return (.travel, "Google Maps") }
+
+        let table: [(SiteKind, [(String, String)])] = [
+            (.social, [("linkedin.com", "LinkedIn"), ("facebook.com", "Facebook"), ("instagram.com", "Instagram"),
+                       ("x.com", "X"), ("twitter.com", "X"), ("reddit.com", "Reddit"), ("tiktok.com", "TikTok"),
+                       ("pinterest.com", "Pinterest"), ("threads.net", "Threads"), ("quora.com", "Quora"),
+                       ("snapchat.com", "Snapchat"), ("tumblr.com", "Tumblr")]),
+            (.chat, [("web.whatsapp.com", "WhatsApp"), ("messenger.com", "Messenger"), ("web.telegram.org", "Telegram"),
+                     ("discord.com", "Discord"), ("chat.google.com", "Google Chat")]),
+            (.shopping, [("daraz.pk", "Daraz"), ("amazon.", "Amazon"), ("aliexpress.", "AliExpress"), ("ebay.", "eBay"),
+                         ("etsy.com", "Etsy"), ("temu.com", "Temu"), ("shein.", "Shein"), ("olx.com.pk", "OLX"),
+                         ("alibaba.com", "Alibaba"), ("walmart.com", "Walmart"), ("khaadi.com", "Khaadi"),
+                         ("sapphireonline.pk", "Sapphire"), ("outfitters.com.pk", "Outfitters"), ("priceoye.pk", "PriceOye"),
+                         ("gulahmedshop.com", "Gul Ahmed"), ("jdot.com", "J."), ("ikea.com", "IKEA")]),
+            (.news, [("dawn.com", "Dawn"), ("geo.tv", "Geo"), ("bbc.com", "BBC"), ("bbc.co.uk", "BBC"), ("cnn.com", "CNN"),
+                     ("aljazeera.com", "Al Jazeera"), ("tribune.com.pk", "Express Tribune"), ("arynews.tv", "ARY News"),
+                     ("samaa.tv", "Samaa"), ("thenews.com.pk", "The News"), ("reuters.com", "Reuters"),
+                     ("nytimes.com", "NY Times"), ("theguardian.com", "The Guardian"), ("apnews.com", "AP News"),
+                     ("news.google.com", "Google News"), ("propakistani.pk", "ProPakistani"), ("express.pk", "Express"),
+                     ("urdupoint.com", "UrduPoint"), ("bloomberg.com", "Bloomberg"), ("techcrunch.com", "TechCrunch"),
+                     ("theverge.com", "The Verge")]),
+            (.learning, [("wikipedia.org", "Wikipedia"), ("coursera.org", "Coursera"), ("udemy.com", "Udemy"),
+                         ("khanacademy.org", "Khan Academy"), ("w3schools.com", "W3Schools"),
+                         ("geeksforgeeks.org", "GeeksforGeeks"), ("developer.mozilla.org", "MDN"), ("medium.com", "Medium"),
+                         ("dev.to", "DEV"), ("freecodecamp.org", "freeCodeCamp"), ("edx.org", "edX"),
+                         ("duolingo.com", "Duolingo"), ("brilliant.org", "Brilliant"), ("developer.apple.com", "Apple Docs"),
+                         ("docs.python.org", "Python Docs"), ("britannica.com", "Britannica"), ("quizlet.com", "Quizlet")]),
+            (.food, [("foodpanda.", "foodpanda"), ("ubereats.com", "Uber Eats"), ("doordash.com", "DoorDash"),
+                     ("deliveroo.", "Deliveroo"), ("kfc.", "KFC"), ("kfcpakistan.com", "KFC"), ("cheezious.com", "Cheezious"), ("mcdonalds.", "McDonald's"), ("dominos.", "Domino's"),
+                     ("pizzahut.", "Pizza Hut"), ("cheetay.pk", "Cheetay"), ("grubhub.com", "Grubhub"),
+                     ("allrecipes.com", "recipes"), ("tasty.co", "recipes")]),
+            (.movie, [("netflix.com", "Netflix"), ("primevideo.com", "Prime Video"), ("disneyplus.com", "Disney+"),
+                      ("hulu.com", "Hulu"), ("max.com", "Max"), ("hotstar.com", "Hotstar"), ("tamashaweb.com", "Tamasha"),
+                      ("mxplayer.in", "MX Player"), ("crunchyroll.com", "Crunchyroll"), ("imdb.com", "IMDb"),
+                      ("tv.apple.com", "Apple TV"), ("zee5.com", "ZEE5"), ("rottentomatoes.com", "Rotten Tomatoes")]),
+            (.travel, [("booking.com", "Booking.com"), ("airbnb.", "Airbnb"), ("skyscanner.", "Skyscanner"),
+                       ("expedia.", "Expedia"), ("piac.com.pk", "PIA"), ("tripadvisor.", "Tripadvisor"),
+                       ("emirates.com", "Emirates"), ("qatarairways.com", "Qatar Airways"), ("agoda.com", "Agoda")]),
+            (.money, [("paypal.com", "PayPal"), ("wise.com", "Wise"), ("binance.com", "Binance"),
+                      ("tradingview.com", "TradingView"), ("investing.com", "Investing.com"), ("psx.com.pk", "PSX"),
+                      ("jazzcash.com.pk", "JazzCash"), ("easypaisa.com.pk", "Easypaisa"), ("meezanbank.com", "Meezan Bank"),
+                      ("hbl.com", "HBL"), ("ubldigital.com", "UBL"), ("bankalfalah.com", "Bank Alfalah"),
+                      ("coinmarketcap.com", "CoinMarketCap"), ("payoneer.com", "Payoneer"), ("sadapay.pk", "SadaPay"),
+                      ("nayapay.com", "NayaPay")]),
+            (.games, [("chess.com", "Chess.com"), ("lichess.org", "Lichess"), ("poki.com", "Poki"),
+                      ("crazygames.com", "CrazyGames"), ("twitch.tv", "Twitch"), ("steampowered.com", "Steam"),
+                      ("epicgames.com", "Epic Games"), ("roblox.com", "Roblox"), ("miniclip.com", "Miniclip"),
+                      ("kick.com", "Kick")]),
+        ]
+        for (kind, sites) in table {
+            if let hit = sites.first(where: { on($0.0) }) { return (kind, hit.1) }
+        }
+        return (.other, host)
     }
 
     /// Guesses the mood of a song or video from its title.

@@ -13,6 +13,27 @@ enum Mood: String, CaseIterable, Hashable {
     case idle, working, attention, done, sleeping
 }
 
+/// Which coding agent a session belongs to. Cursor sessions are written by the Cursor bridge
+/// with a "cursor-" file name prefix; everything else comes from Claude Code.
+enum Agent: Equatable {
+    case claude, cursor
+
+    init(sessionFile url: URL) {
+        self = url.lastPathComponent.hasPrefix("cursor-") ? .cursor : .claude
+    }
+
+    var name: String { self == .cursor ? "Cursor" : "Claude" }
+
+    /// A generic SF Symbol shown in the bubble (not a brand logo).
+    var icon: String { self == .cursor ? "cursorarrow.rays" : "sparkle" }
+
+    /// Bubble icon and antenna color while this agent works.
+    var tint: Color {
+        self == .cursor ? Color(red: 0.25, green: 0.65, blue: 1.0)   // blue for Cursor
+                        : Color(red: 0.90, green: 0.50, blue: 0.30)  // warm orange for Claude
+    }
+}
+
 enum ReactionKind: CaseIterable {
     case spin, backflip, boing, wave, giggle, dizzy
 
@@ -43,6 +64,12 @@ final class BuddyModel: ObservableObject {
     @Published private(set) var mood: Mood = .idle
     /// Projects Claude is working in right now, most recent first.
     @Published private(set) var projects: [String] = []
+    /// Agents working right now, most recent first.
+    @Published private(set) var agents: [Agent] = []
+    /// The agent that finished most recently (for the "done" bubble).
+    @Published private(set) var doneAgent: Agent = .claude
+    /// Voice conversation with you (listening / thinking / answering).
+    @Published private(set) var voice: VoiceState = .off
 
     /// Pupil offset toward the cursor, updated by the app delegate.
     var cursorLook = CGSize.zero
@@ -72,9 +99,10 @@ final class BuddyModel: ObservableObject {
             at: sessionsDir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         let filter = settings.projectFilter.trimmingCharacters(in: .whitespaces)
 
-        var working: [(Date, SessionEvent)] = []
+        var working: [(Date, SessionEvent, Agent)] = []
         var waiting = false
         var newestStop = Date.distantPast
+        var newestStopAgent = Agent.claude
 
         for url in files where url.pathExtension == "json" {
             guard let mtime = try? url.resourceValues(forKeys: [.contentModificationDateKey])
@@ -89,6 +117,7 @@ final class BuddyModel: ObservableObject {
             if !filter.isEmpty, !(ev.cwd ?? "").localizedCaseInsensitiveContains(filter) { continue }
 
             lastActivity = max(lastActivity, mtime)
+            let agent = Agent(sessionFile: url)
 
             // Stop doesn't fire when a turn is interrupted, so "working" goes stale after a while.
             let staleAfter: TimeInterval? = switch ev.event {
@@ -97,11 +126,11 @@ final class BuddyModel: ObservableObject {
             default: nil
             }
             if let staleAfter, age < staleAfter {
-                working.append((mtime, ev))
+                working.append((mtime, ev, agent))
             } else if ev.event == "PermissionRequest", age < 900 {
                 waiting = true
             } else if ev.event == "Stop" {
-                newestStop = max(newestStop, mtime)
+                if mtime > newestStop { newestStop = mtime; newestStopAgent = agent }
             }
         }
 
@@ -110,6 +139,10 @@ final class BuddyModel: ObservableObject {
                 doneUntil = now.addingTimeInterval(3.5)
             }
             newestStopSeen = newestStop
+            if doneAgent != newestStopAgent { doneAgent = newestStopAgent }
+            if settings.speakAloud, voice == .off, now.timeIntervalSince(newestStop) < 5 {
+                Speaker.shared.say("\(newestStopAgent.name) is done!")
+            }
         }
 
         let newMood: Mood
@@ -126,12 +159,31 @@ final class BuddyModel: ObservableObject {
         }
 
         var newProjects: [String] = []
-        for (_, ev) in working.sorted(by: { $0.0 > $1.0 }) {
+        var newAgents: [Agent] = []
+        for (_, ev, agent) in working.sorted(by: { $0.0 > $1.0 }) {
+            if !newAgents.contains(agent) { newAgents.append(agent) }
             let name = ((ev.cwd ?? "") as NSString).lastPathComponent
             if !name.isEmpty, !newProjects.contains(name) { newProjects.append(name) }
         }
+        if settings.speakAloud, voice == .off, newMood != mood {
+            if newMood == .attention {
+                Speaker.shared.say("Claude needs your OK!")
+            } else if newMood == .working, mood != .attention, settings.announceStart, let lead = newAgents.first {
+                if let project = newProjects.first {
+                    Speaker.shared.say("\(lead.name) is working on \(project)")
+                } else {
+                    Speaker.shared.say("\(lead.name) is working")
+                }
+            }
+        }
         if mood != newMood { mood = newMood }
         if projects != newProjects { projects = newProjects }
+        if agents != newAgents { agents = newAgents }
+    }
+
+    func setVoice(_ state: VoiceState) {
+        if voice != state { voice = state }
+        lastActivity = Date()   // a chat keeps the buddy awake
     }
 
     /// Called when the buddy is clicked.
@@ -162,6 +214,7 @@ final class BuddyModel: ObservableObject {
                      "I believe in you!", "*happy wiggle*", "What are we building?"]
         }
         phrase = lines.randomElement()
+        if settings.speakAloud, let phrase { Speaker.shared.say(phrase) }
         phraseUntil = now.addingTimeInterval(2.5)
     }
 

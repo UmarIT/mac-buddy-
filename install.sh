@@ -19,5 +19,12 @@ rm -rf "$DEST"
 cp -R build/MacBuddy.app "$DEST"
 
 "$DEST/Contents/MacOS/MacBuddy" --connect
+
+# Also connect Cursor's AI agent, if Cursor is installed.
+if [ -d "$HOME/.cursor" ] && [ -x /usr/bin/python3 ]; then
+  /usr/bin/python3 cursor/mac-buddy-cursor.py install || echo "Couldn't connect Cursor (you can retry: python3 cursor/mac-buddy-cursor.py install)"
+fi
+
 open "$DEST"
-echo "Mac Buddy is running. Right-click it for options, or open it again for Settings."
+echo "Mac Buddy is running. Double-click it (or press Control-Option-B) to talk to it."
+echo "Right-click it for options, or open it again for Settings."

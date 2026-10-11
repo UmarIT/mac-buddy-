@@ -8,18 +8,31 @@
 
 It types on its laptop while Claude is busy, waves when Claude needs your permission, celebrates when the task is done, and naps when nothing's going on.
 
-[![Download](https://img.shields.io/github/v/release/mohsin2596/mac-buddy?label=download&color=D97757)](https://github.com/mohsin2596/mac-buddy/releases/latest)
+**Now it also works with Cursor, talks out loud, and listens.** Double-click it and ask anything.
+
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)](#install)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![Universal](https://img.shields.io/badge/Apple%20silicon%20%2B%20Intel-universal-blue)](#install)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-[Install](#install) · [Features](#features) · [Customize](#customize) · [How it works](#how-it-works) · [FAQ](#faq)
+[What's new](#whats-new-in-this-version) · [Install](#install) · [Features](#features) · [Customize](#customize) · [How it works](#how-it-works) · [FAQ](#faq)
 
 </div>
 
 ---
+
+> Based on [Mac Buddy by Mohsin Ajmal](https://github.com/mohsin2596/mac-buddy) (MIT licensed), with the additions below.
+
+## What's new in this version
+
+- 🎙️ **Talk to your buddy.** Double-click it or press <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>B</kbd>, then just speak. It listens, thinks with Claude Code on your Mac, and answers out loud. Ask it anything ("what's the weather like in Lahore?", "explain what a hook is"), and follow-up questions remember the conversation.
+- 🛠️ **Ask it to do things (optional).** Turn on **Settings → Claude Code → Let Buddy do things on your Mac** and it can run commands and create or change files for you. Off by default.
+- 🗣️ **It speaks.** It says *"Cursor is done!"*, *"Claude is done!"*, *"Claude needs your OK!"* and its click reactions with your Mac's built-in voice. Toggle it from the right-click menu.
+- 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent too, not just Claude Code.
+- 🎨 **Knows who's working.** Claude shows a ✦ sparkle and an orange antenna, Cursor shows a pointer icon and a blue antenna. The bubble says *"Claude · my-app"* or *"Cursor · my-app"*.
+
+No API key is needed: the voice assistant uses the Claude Code you're already logged in to.
 
 ## Features
 
@@ -44,9 +57,30 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 
 ## Install
 
-**Requirements:** macOS 14 Sonoma or later (Apple silicon or Intel) and [Claude Code](https://claude.com/claude-code). Nothing else.
+**Requirements:** macOS 14 Sonoma or later (Apple silicon or Intel) and [Claude Code](https://claude.com/claude-code), logged in. [Cursor](https://cursor.com) is optional.
 
-### Option 1: Download the app
+### Recommended: build from source
+
+This is the way to get everything in this version. It needs the Xcode Command Line Tools (`xcode-select --install`).
+
+```bash
+git clone https://github.com/UmarIT/mac-buddy-.git
+cd mac-buddy-
+./install.sh
+```
+
+The installer builds the app, puts it in `~/Applications`, connects it to Claude Code, connects it to Cursor if Cursor is installed, and opens it. The first time you talk to it, macOS asks for **Microphone** and **Speech Recognition** access; click **Allow**.
+
+To connect Cursor later (for example, after installing Cursor):
+
+```bash
+python3 cursor/mac-buddy-cursor.py install    # then restart Cursor
+```
+
+> [!NOTE]
+> The download and one-line options below install the **original** Mac Buddy release, which doesn't include voice, Cursor support or the Claude/Cursor colors.
+
+### Option 1: Download the original app
 
 <a href="https://github.com/mohsin2596/mac-buddy/releases/latest/download/MacBuddy.dmg"><img src="https://img.shields.io/badge/Download-MacBuddy.dmg-D97757?style=for-the-badge&logo=apple&logoColor=white" alt="Download MacBuddy.dmg"></a>
 
@@ -57,7 +91,7 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 > [!IMPORTANT]
 > Mac Buddy isn't notarized by Apple yet, so the first time you open it macOS says it *"could not verify"* the app. Click **Done**, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only have to do this once.
 
-### Option 2: One-line install (no security prompt)
+### Option 2: One-line install of the original app (no security prompt)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mohsin2596/mac-buddy/main/scripts/get.sh | sh
@@ -65,23 +99,13 @@ curl -fsSL https://raw.githubusercontent.com/mohsin2596/mac-buddy/main/scripts/g
 
 This downloads the latest release into `/Applications`, connects it to Claude Code and launches it. Files downloaded from Terminal aren't flagged by Gatekeeper, so there's no "Open Anyway" step. [Read the script](scripts/get.sh) first if you like.
 
-### Option 3: Build from source
-
-Needs the Xcode Command Line Tools (`xcode-select --install`).
-
-```bash
-git clone https://github.com/mohsin2596/mac-buddy.git
-cd mac-buddy
-./install.sh
-```
-
 ### What "Connect" does
 
 It adds a few hooks to `~/.claude/settings.json` that forward Claude Code's events to Mac Buddy. Your existing settings and hooks are kept, and a backup is saved as `settings.json.bak-macbuddy`. You can connect or disconnect at any time from the right-click menu or **Settings → Claude Code**.
 
 ### Update
 
-Download the new DMG and replace the app, or re-run the one-line installer.
+In your clone, run `git pull && ./install.sh`.
 
 ### Uninstall
 
@@ -91,13 +115,16 @@ Right-click the buddy, choose **Disconnect from Claude Code**, then quit it and 
 ./uninstall.sh
 ```
 
+This also removes the Cursor connection.
+
 ## Usage
 
 | Action | What happens |
 | --- | --- |
 | **Click** the buddy | It reacts and says something |
+| **Double-click** the buddy, or press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>B</kbd> | Starts listening. Speak, then pause; it answers out loud. Press again while it's listening to send right away, or while it's thinking to cancel |
 | **Drag** the buddy | Moves it; the position is remembered |
-| **Right-click** the buddy | Say Hi, Eyes Follow Cursor, Settings…, Reset Position, Quit |
+| **Right-click** the buddy | Talk to Buddy, New Conversation, Say Hi, Eyes Follow Cursor, Speak Out Loud, Settings…, Reset Position, Quit |
 | **Open the app again** (Spotlight / Finder) | Opens the Settings window |
 
 ## Customize
@@ -162,7 +189,19 @@ flowchart LR
 
    **needs you** › **working** › **just finished** › **asleep** › **idle**
 
-Everything stays on your Mac. No network calls, no telemetry.
+The activity tracking stays on your Mac: no network calls, no telemetry.
+
+### Voice assistant
+
+1. **Listening** uses Apple's Speech framework. When your Mac supports on-device recognition, your voice never leaves the Mac.
+2. **Thinking** runs `claude -p` (Claude Code's print mode) on your Mac with your existing login, so your question goes to Claude just like typing it into Claude Code would. Follow-ups within 15 minutes continue the same conversation; **New Conversation** starts over.
+3. **Answering** uses the Mac's built-in voice (`AVSpeechSynthesizer`). Change the voice in **System Settings → Accessibility → Spoken Content**.
+
+By default the assistant can only read files and search the web. With **Let Buddy do things on your Mac** turned on, it may also run commands and edit files without asking first, so keep that off unless you want it.
+
+### Cursor
+
+`cursor/mac-buddy-cursor.py` adds a few hooks to `~/.cursor/hooks.json` (your existing hooks are kept and a backup is saved as `hooks.json.bak-macbuddy`). It only uses Cursor's "observe" events, never its approval events, so it can't approve or block anything the agent does.
 
 ### Project layout
 
@@ -175,6 +214,12 @@ Sources/
   Settings.swift        Persisted settings, colours, accessories
   SettingsView.swift    The Settings window
   ClaudeHooks.swift     Hook handling plus connecting/disconnecting Claude Code
+  Listener.swift        Microphone + speech-to-text
+  Assistant.swift       Asks Claude Code (claude -p) and returns the answer
+  VoiceBuddy.swift      Listen → think → answer conversation flow
+  Speech.swift          Text-to-speech
+  HotKey.swift          The global Control-Option-B shortcut
+cursor/mac-buddy-cursor.py  Connects Cursor's agent to the buddy
 scripts/make-release.sh   Builds MacBuddy.dmg + MacBuddy.zip for a GitHub release
 scripts/get.sh            The one-line installer
 Tools/RenderAssets.swift  Renders the README images from the real drawing code
@@ -225,7 +270,14 @@ The app isn't notarized yet. Go to **System Settings → Privacy & Security** an
 <details>
 <summary><b>Does it work with other tools besides Claude Code?</b></summary>
 
-Anything that writes a JSON file like `{"event": "PreToolUse", "tool": "Bash", "cwd": "/path"}` into `~/.mac-buddy/sessions/` will drive the buddy, so it's easy to hook up to other agents or scripts.
+Yes, Cursor works out of the box (see [Cursor](#cursor)). Beyond that, anything that writes a JSON file like `{"event": "PreToolUse", "tool": "Bash", "cwd": "/path"}` into `~/.mac-buddy/sessions/` will drive the buddy, so it's easy to hook up to other agents or scripts.
+</details>
+
+<details>
+<summary><b>The buddy doesn't hear me, or says it can't find Claude Code.</b></summary>
+
+- Allow Mac Buddy in **System Settings → Privacy & Security → Microphone** and **Speech Recognition**. After rebuilding the app, macOS may ask again.
+- Make sure `claude` works in Terminal and you're logged in (run `claude` once).
 </details>
 
 ## Contributing

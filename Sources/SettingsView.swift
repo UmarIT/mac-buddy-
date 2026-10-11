@@ -259,6 +259,29 @@ private struct ClaudeTab: View {
             }
 
             Section {
+                Toggle("Speak out loud", isOn: $settings.speakAloud)
+                Toggle("Also say when work starts", isOn: $settings.announceStart)
+                    .disabled(!settings.speakAloud)
+            } header: {
+                Text("Voice")
+            } footer: {
+                Text("Uses your Mac's built-in voice. It says when Claude or Cursor finishes, when Claude needs your OK, and its lines when you click it.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                LabeledContent("Talk to it", value: "Double-click the buddy or press \(HotKey.defaultLabel)")
+                Toggle("Let Buddy do things on your Mac", isOn: $settings.assistantActions)
+            } header: {
+                Text("Voice assistant")
+            } footer: {
+                Text(settings.assistantActions
+                     ? "Buddy can run commands and create or change files when you ask, without asking first. Speech can be misheard, so turn this off if you're unsure."
+                     : "Buddy answers questions using Claude Code on this Mac (no API key needed). It can read files and search the web, but won't change anything.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
                 TextField("Only follow projects containing", text: $settings.projectFilter,
                           prompt: Text("All projects"))
                 LabeledContent("Right now", value: status)

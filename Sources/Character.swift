@@ -130,6 +130,8 @@ struct CharacterView: View {
     let t: Double
     let reaction: Reaction?
     let style: BuddyStyle
+    /// Antenna color while working (Claude orange / Cursor blue); nil keeps the default.
+    var agentTint: Color? = nil
 
     private var limb: Color { style.limb.color }
 
@@ -179,7 +181,7 @@ struct CharacterView: View {
         case .idle:
             break
         case .working:
-            p.antenna = Color(red: 0.3, green: 0.8, blue: 1.0)
+            p.antenna = agentTint ?? Color(red: 0.3, green: 0.8, blue: 1.0)
             p.antennaGlow = 0.5 + 0.5 * sin(t * 8)
             if let work { p = blended(from: p, to: workPose(p, work), by: work.presence) }
         case .done:
@@ -561,6 +563,7 @@ struct BuddyStack: View {
     let t: Double
     let reaction: Reaction?
     let style: BuddyStyle
+    var agentTint: Color? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -573,24 +576,32 @@ struct BuddyStack: View {
             .frame(width: BuddyLayout.window.width, height: BuddyLayout.bubbleHeight, alignment: .bottom)
             .animation(.spring(duration: 0.3, bounce: 0.4), value: bubble)
 
-            CharacterView(mood: mood, t: t, reaction: reaction, style: style)
+            CharacterView(mood: mood, t: t, reaction: reaction, style: style, agentTint: agentTint)
         }
         .frame(width: BuddyLayout.window.width, height: BuddyLayout.window.height, alignment: .bottom)
     }
 
-    static func bubble(for mood: Mood, projects: [String], settings: BuddySettings) -> BubbleInfo? {
+    static func bubble(for mood: Mood, projects: [String], settings: BuddySettings,
+                       agents: [Agent] = [], doneAgent: Agent? = nil) -> BubbleInfo? {
         guard settings.showBubble else { return nil }
         switch mood {
         case .attention:
             return BubbleInfo(text: "Claude needs your OK!", icon: "exclamationmark.circle.fill", tint: .red)
         case .working:
-            guard settings.showProject, let first = projects.first else { return BubbleInfo(text: "Working…", spinner: true) }
+            let who = agents.map(\.name).joined(separator: " + ")
+            let lead = agents.first
+            guard settings.showProject, let first = projects.first else {
+                return BubbleInfo(text: who.isEmpty ? "Working…" : "\(who) working…",
+                                  icon: lead?.icon, tint: lead?.tint ?? .primary, spinner: true)
+            }
             var text = first
             if projects.count > 1 { text += " + \(projects[1])" }
             if projects.count > 2 { text += " +\(projects.count - 2)" }
-            return BubbleInfo(text: text, icon: "folder.fill", tint: Palette.accent, spinner: true)
+            if !who.isEmpty { text = "\(who) · \(text)" }
+            return BubbleInfo(text: text, icon: lead?.icon ?? "folder.fill", tint: lead?.tint ?? Palette.accent, spinner: true)
         case .done:
-            return BubbleInfo(text: "All done!", icon: "checkmark.circle.fill", tint: .green)
+            return BubbleInfo(text: doneAgent.map { "\($0.name) is done!" } ?? "All done!",
+                              icon: "checkmark.circle.fill", tint: .green)
         case .idle, .sleeping:
             return nil
         }
@@ -603,14 +614,46 @@ struct BuddyView: View {
     @ObservedObject var model: BuddyModel
     @ObservedObject var settings: BuddySettings
 
+    /// While you're chatting, look busy when thinking and calm otherwise.
+    static func displayMood(_ mood: Mood, voice: VoiceState) -> Mood {
+        switch voice {
+        case .off: return mood
+        case .thinking: return .working
+        case .listening(_), .answering(_): return .idle
+        }
+    }
+
+    static func voiceBubble(_ voice: VoiceState) -> BubbleInfo? {
+        switch voice {
+        case .off:
+            return nil
+        case .listening(let heard):
+            let text = heard.isEmpty ? "Listening…" : "…" + String(heard.suffix(30))
+            return BubbleInfo(text: text, icon: "mic.fill", tint: .red)
+        case .thinking:
+            return BubbleInfo(text: "Thinking…", spinner: true)
+        case .answering(let answer):
+            let text = answer.count > 40 ? String(answer.prefix(38)) + "…" : answer
+            return BubbleInfo(text: text, icon: "bubble.left.fill", tint: Palette.accent)
+        }
+    }
+
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 40)) { timeline in
             let now = timeline.date
             let t = now.timeIntervalSinceReferenceDate * settings.animationSpeed
-            let bubble = model.activePhrase(at: now).map { BubbleInfo(text: $0) }
-                ?? BuddyStack.bubble(for: model.mood, projects: model.projects, settings: settings)
-            BuddyStack(bubble: bubble, mood: model.mood, t: t, reaction: model.reaction(at: now),
-                       style: settings.style(look: model.cursorLook))
+            let bubble = Self.voiceBubble(model.voice)
+                ?? model.activePhrase(at: now).map { BubbleInfo(text: $0) }
+                ?? BuddyStack.bubble(for: model.mood, projects: model.projects, settings: settings,
+                                     agents: model.agents, doneAgent: model.doneAgent)
+            let mood = Self.displayMood(model.mood, voice: model.voice)
+            // With both agents busy, the antenna takes turns between their colors.
+            let agents = model.agents
+            let tint: Color? = agents.isEmpty ? nil
+                : agents[Int(now.timeIntervalSinceReferenceDate / 1.5) % agents.count].tint
+            BuddyStack(bubble: bubble, mood: mood, t: t, reaction: model.reaction(at: now),
+                       style: settings.style(look: model.cursorLook),
+                       agentTint: model.voice == .thinking ? Optional(Agent.claude.tint) : tint)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,

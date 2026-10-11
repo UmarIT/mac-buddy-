@@ -6,6 +6,7 @@ import SwiftUI
 
 final class BuddyHostingView: NSHostingView<BuddyView> {
     var onClick: (() -> Void)?
+    var onDoubleClick: (() -> Void)?
     var onDragEnd: (() -> Void)?
     var menuProvider: (() -> NSMenu)?
 
@@ -40,7 +41,7 @@ final class BuddyHostingView: NSHostingView<BuddyView> {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if dragged { onDragEnd?() } else { onClick?() }
+        if dragged { onDragEnd?() } else if event.clickCount == 2 { onDoubleClick?() } else { onClick?() }
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -53,6 +54,8 @@ final class BuddyHostingView: NSHostingView<BuddyView> {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let settings = BuddySettings()
     private lazy var model = BuddyModel(settings: settings)
+    private lazy var voice = VoiceBuddy(model: model, settings: settings)
+    private var hotKey: HotKey?
     private var panel: NSPanel!
     private var settingsWindow: NSWindow?
     private var timers: [Timer] = []
@@ -65,7 +68,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let host = BuddyHostingView(rootView: BuddyView(model: model, settings: settings))
         host.sizingOptions = []
-        host.onClick = { [weak self] in self?.model.poke() }
+        host.onClick = { [weak self] in
+            guard let self, !self.model.voice.isActive else { return }
+            self.model.poke()
+        }
+        host.onDoubleClick = { [weak self] in self?.voice.toggle() }
+        hotKey = HotKey { [weak self] in
+            MainActor.assumeIsolated { self?.voice.toggle() }
+        }
         host.onDragEnd = { [weak self] in self?.saveOrigin() }
         host.menuProvider = { [weak self] in self?.makeMenu() ?? NSMenu() }
 
@@ -179,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Optionally fade out while Claude is idle (but never while you're editing settings).
         let idle = model.mood == .idle || model.mood == .sleeping
         let hidden = settings.hideWhenIdle && idle && model.activePhrase(at: Date()) == nil
+            && !model.voice.isActive
             && !(settingsWindow?.isVisible ?? false)
         let alpha: CGFloat = hidden ? 0 : 1
         if alpha != targetAlpha {
@@ -267,10 +278,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.addItem(withTitle: "Talk to Buddy (\(HotKey.defaultLabel) or double-click)", action: #selector(talk),
+                     keyEquivalent: "").target = self
+        menu.addItem(withTitle: "New Conversation", action: #selector(newConversation), keyEquivalent: "").target = self
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Say Hi 👋", action: #selector(sayHi), keyEquivalent: "").target = self
         let follow = menu.addItem(withTitle: "Eyes Follow Cursor", action: #selector(toggleFollow), keyEquivalent: "")
         follow.target = self
         follow.state = settings.followCursor ? .on : .off
+        let speak = menu.addItem(withTitle: "Speak Out Loud", action: #selector(toggleSpeak), keyEquivalent: "")
+        speak.target = self
+        speak.state = settings.speakAloud ? .on : .off
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Reset Position", action: #selector(resetPosition), keyEquivalent: "").target = self
@@ -315,7 +333,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func sayHi() { model.poke() }
+    @objc private func talk() { voice.toggle() }
+    @objc private func newConversation() { voice.newConversation() }
     @objc private func toggleFollow() { settings.followCursor.toggle() }
+    @objc private func toggleSpeak() { settings.speakAloud.toggle() }
 }
 
 // MARK: - Entry point
@@ -346,6 +367,9 @@ enum MacBuddyApp {
                 exit(1)
             }
         }
+
+        // Writing to a helper process that has already quit must not crash the app.
+        signal(SIGPIPE, SIG_IGN)
 
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)

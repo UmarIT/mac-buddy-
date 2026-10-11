@@ -491,13 +491,12 @@ struct CharacterView: View {
                 .frame(width: 56, height: 34)
                 .overlay {
                     if screenAgent == .cursor {
-                        // A generic pointer that "clicks" now and then (not Cursor's logo).
-                        let click = max(0, sin(t * 4))
-                        Image(systemName: "cursorarrow")
-                            .font(.system(size: 14, weight: .bold))
+                        // A code symbol that pulses like a heartbeat (not Cursor's logo).
+                        let pulse = max(0, sin(t * 4))
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 12, weight: .heavy))
                             .foregroundStyle(style.body.color)
-                            .scaleEffect(1 - 0.15 * click)
-                            .offset(x: 1, y: -1 + 1.5 * click)
+                            .scaleEffect(1 + 0.12 * pulse)
                     } else {
                         Image(systemName: "asterisk")
                             .font(.system(size: 11, weight: .black))
@@ -634,6 +633,7 @@ struct BuddyView: View {
         var s = style
         s.body = Agent.cursorBody
         s.limb = Agent.cursorLimb
+        if s.accessory == .none { s.accessory = .headphones }   // coding mode
         return s
     }
 

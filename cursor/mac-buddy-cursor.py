@@ -109,6 +109,15 @@ def handle_event(raw):
 
 
 def run_hook():
+    if os.environ.get("MAC_BUDDY_ASSISTANT"):
+        # The buddy's own voice-assistant request; don't react to it.
+        try:
+            raw = sys.stdin.read()
+            if json.loads(raw or "{}").get("hook_event_name") == "beforeSubmitPrompt":
+                print('{"continue": true}')
+        except Exception:
+            pass
+        sys.exit(0)
     try:
         raw = sys.stdin.read()
     except Exception:

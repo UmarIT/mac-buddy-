@@ -271,13 +271,13 @@ private struct ClaudeTab: View {
 
             Section {
                 LabeledContent("Talk to it", value: "Double-click the buddy or press \(HotKey.defaultLabel)")
-                Toggle("Let Buddy do things on your Mac", isOn: $settings.assistantActions)
+                Toggle("Let Claude Code or Cursor change files for me", isOn: $settings.assistantActions)
             } header: {
                 Text("Voice assistant")
             } footer: {
                 Text(settings.assistantActions
-                     ? "Buddy can run commands and create or change files when you ask, without asking first. Speech can be misheard, so turn this off if you're unsure."
-                     : "Buddy answers questions using Claude Code on this Mac (no API key needed). It can read files and search the web, but won't change anything.")
+                     ? "If Claude Code or Cursor's agent is installed, it can also run commands and change files when you ask, without asking first. Speech can be misheard, so turn this off if you're unsure."
+                     : "Free: say things like \"open Safari\", \"search for cats\", \"volume up\" or \"set a timer for 5 minutes\". Questions are answered by Apple's on-device AI (macOS 26 with Apple Intelligence), or by Claude Code or Cursor if installed.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

@@ -17,6 +17,8 @@ final class VoiceBuddy {
     private let settings: BuddySettings
     private let listener = Listener()
     private let assistant = Assistant()
+    private let onDevice = OnDeviceBrain()
+    private var thinkingTask: Task<Void, Never>?
     private var clearTimer: Timer?
 
     init(model: BuddyModel, settings: BuddySettings) {
@@ -34,6 +36,7 @@ final class VoiceBuddy {
         case .listening(_):
             listener.stop()
         case .thinking:
+            thinkingTask?.cancel()
             assistant.cancel()
             model.setVoice(.off)
             Speaker.shared.say("Okay, never mind.")
@@ -48,6 +51,7 @@ final class VoiceBuddy {
     /// Starts a fresh conversation (the buddy forgets earlier questions).
     func newConversation() {
         assistant.reset()
+        onDevice.reset()
         Speaker.shared.say("Fresh start! What's up?")
     }
 
@@ -57,10 +61,33 @@ final class VoiceBuddy {
             answer("I didn't catch that. Try again?")
             return
         }
+        // 1. Things it can just do, instantly and for free: open apps, search, volume, timers…
+        if let done = QuickCommands.handle(question) {
+            answer(done)
+            return
+        }
         model.setVoice(.thinking)
-        assistant.ask(question, allowActions: settings.assistantActions, folder: NSHomeDirectory()) { [weak self] reply in
-            guard let self, self.model.voice == .thinking, !reply.isEmpty else { return }
-            self.answer(reply)
+
+        // 2. Questions: Apple's free on-device AI when this Mac has it…
+        if OnDeviceBrain.isAvailable {
+            thinkingTask = Task { [weak self] in
+                guard let self else { return }
+                let reply = await self.onDevice.ask(question)
+                guard !Task.isCancelled, self.model.voice == .thinking else { return }
+                self.answer(reply)
+            }
+            return
+        }
+
+        // 3. …otherwise Claude Code or Cursor's agent, if one is installed.
+        assistant.ask(question, brain: .auto, allowActions: settings.assistantActions,
+                      folder: NSHomeDirectory()) { [weak self] reply, notFound in
+            guard let self, self.model.voice == .thinking else { return }
+            if notFound {
+                self.answer(OnDeviceBrain.unavailableReason)
+            } else if !reply.isEmpty {
+                self.answer(reply)
+            }
         }
     }
 

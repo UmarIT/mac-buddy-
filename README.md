@@ -26,13 +26,14 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 
 ## What's new in this version
 
-- 🎙️ **Talk to your buddy.** Double-click it or press <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>B</kbd>, then just speak. It listens, thinks with Claude Code on your Mac, and answers out loud. Ask it anything ("what's the weather like in Lahore?", "explain what a hook is"), and follow-up questions remember the conversation.
-- 🛠️ **Ask it to do things (optional).** Turn on **Settings → Claude Code → Let Buddy do things on your Mac** and it can run commands and create or change files for you. Off by default.
+- 🎙️ **Talk to your buddy, for free.** Double-click it or press <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>B</kbd>, then just speak. It answers out loud.
+- 🛠️ **It does what you say**, instantly and with no account: *"open Safari"*, *"open YouTube"*, *"go to github.com"*, *"search for biryani in Lahore"*, *"play Atif Aslam on YouTube"*, *"close Chrome"*, *"volume up"* / *"mute"* / *"set volume to 40"*, *"play music"* / *"next song"*, *"set a timer for 5 minutes"*, *"take a screenshot"*, *"open my Downloads folder"*, *"what time is it?"*
+- 💬 **It answers questions** with Apple's free, private on-device AI (macOS 26 with Apple Intelligence turned on). If that isn't available, it uses Claude Code or Cursor's agent when one is installed.
 - 🗣️ **It speaks.** It says *"Cursor is done!"*, *"Claude is done!"*, *"Claude needs your OK!"* and its click reactions with your Mac's built-in voice. Toggle it from the right-click menu.
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent too, not just Claude Code.
 - 🎨 **Knows who's working.** Claude shows a ✦ sparkle and an orange antenna, Cursor shows a pointer icon and a blue antenna. The bubble says *"Claude · my-app"* or *"Cursor · my-app"*.
 
-No API key is needed: the voice assistant uses the Claude Code you're already logged in to.
+No API key or paid account is needed for commands, or for questions on Macs with Apple Intelligence.
 
 ## Features
 
@@ -194,10 +195,11 @@ The activity tracking stays on your Mac: no network calls, no telemetry.
 ### Voice assistant
 
 1. **Listening** uses Apple's Speech framework. When your Mac supports on-device recognition, your voice never leaves the Mac.
-2. **Thinking** runs `claude -p` (Claude Code's print mode) on your Mac with your existing login, so your question goes to Claude just like typing it into Claude Code would. Follow-ups within 15 minutes continue the same conversation; **New Conversation** starts over.
-3. **Answering** uses the Mac's built-in voice (`AVSpeechSynthesizer`). Change the voice in **System Settings → Accessibility → Spoken Content**.
+2. **Doing** — commands like "open Safari" or "volume up" are handled right in the app (`Commands.swift`), with no AI and no internet.
+3. **Thinking** — questions go to Apple's on-device model (`OnDeviceBrain.swift`, FoundationModels). If that isn't available, `claude -p` (Claude Code) or `agent -p` (Cursor) runs on your Mac with your existing login. Follow-ups within 15 minutes continue the same conversation; **New Conversation** starts over.
+4. **Answering** uses the Mac's built-in voice (`AVSpeechSynthesizer`). Change the voice in **System Settings → Accessibility → Spoken Content**.
 
-By default the assistant can only read files and search the web. With **Let Buddy do things on your Mac** turned on, it may also run commands and edit files without asking first, so keep that off unless you want it.
+When Claude Code or Cursor answers, it can only read files and search the web by default. With **Let Claude Code or Cursor change files for me** turned on, it may also run commands and edit files without asking first, so keep that off unless you want it.
 
 ### Cursor
 
@@ -215,7 +217,9 @@ Sources/
   SettingsView.swift    The Settings window
   ClaudeHooks.swift     Hook handling plus connecting/disconnecting Claude Code
   Listener.swift        Microphone + speech-to-text
-  Assistant.swift       Asks Claude Code (claude -p) and returns the answer
+  Commands.swift        Free built-in commands (open apps/sites, search, volume, timers…)
+  OnDeviceBrain.swift   Free answers from Apple's on-device AI
+  Assistant.swift       Optional fallback: asks Claude Code or Cursor's agent
   VoiceBuddy.swift      Listen → think → answer conversation flow
   Speech.swift          Text-to-speech
   HotKey.swift          The global Control-Option-B shortcut
@@ -277,7 +281,7 @@ Yes, Cursor works out of the box (see [Cursor](#cursor)). Beyond that, anything 
 <summary><b>The buddy doesn't hear me, or says it can't find Claude Code.</b></summary>
 
 - Allow Mac Buddy in **System Settings → Privacy & Security → Microphone** and **Speech Recognition**. After rebuilding the app, macOS may ask again.
-- Make sure `claude` works in Terminal and you're logged in (run `claude` once).
+- For answers to questions, turn on Apple Intelligence (macOS 26+). Commands like "open Safari" work without it.
 </details>
 
 ## Contributing

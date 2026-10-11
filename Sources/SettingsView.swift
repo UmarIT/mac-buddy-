@@ -212,6 +212,15 @@ private struct BehaviorTab: View {
                 Text("Clicking")
             }
 
+            Section {
+                Toggle("React to music and videos you play", isOn: $settings.reactToMusic)
+            } header: {
+                Text("Music")
+            } footer: {
+                Text("Reads the title of what's playing in Music, Spotify, or a YouTube tab in Safari, Chrome, Brave or Edge, then dances, nods along, gets sad, or listens quietly to Quran recitation. It doesn't record any audio. macOS asks once per app for permission.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Sleep") {
                 Toggle("Fall asleep when nothing is happening", isOn: $settings.sleepEnabled)
                 Stepper("After \(Int(settings.sleepMinutes)) min", value: $settings.sleepMinutes, in: 1...120)

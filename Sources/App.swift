@@ -95,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tick() }
             },
+            Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.model.checkMusic() }
+            },
         ]
 
         if ClaudeHooks.isConnected {
@@ -271,6 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let follow = menu.addItem(withTitle: "Eyes Follow Cursor", action: #selector(toggleFollow), keyEquivalent: "")
         follow.target = self
         follow.state = settings.followCursor ? .on : .off
+        let music = menu.addItem(withTitle: "React to Music", action: #selector(toggleMusic), keyEquivalent: "")
+        music.target = self
+        music.state = settings.reactToMusic ? .on : .off
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Reset Position", action: #selector(resetPosition), keyEquivalent: "").target = self
@@ -316,6 +322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func sayHi() { model.poke() }
     @objc private func toggleFollow() { settings.followCursor.toggle() }
+    @objc private func toggleMusic() { settings.reactToMusic.toggle() }
 }
 
 // MARK: - Entry point

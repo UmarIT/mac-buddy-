@@ -22,5 +22,7 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Mac Buddy reads the title of the song or video you're playing so it can react to it.</string>
 </dict>
 </plist>

@@ -28,6 +28,7 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent as well as Claude Code.
 - 🔵 **Cursor looks different.** While Cursor's agent works, or whenever Cursor is the app you're using, the buddy turns blue, puts on headphones and shows a `</>` symbol on its laptop. With Claude it keeps its usual orange look.
+- 🎵 **Reacts to your music.** Play something in Music, Spotify, or on YouTube in Safari, Chrome, Brave or Edge and the buddy reads the title: it **dances** to party and wedding songs, **gets sad** (with a little tear) at sad songs, **nods along** to everything else, and for **Quran recitation** it goes still, closes its eyes and listens quietly. It only reads titles and never records audio. Turn it off from the right-click menu (**React to Music**).
 - 🏷️ **The bubble says who's working**: *"Claude · my-app"* or *"Cursor · my-app"*, and *"Claude is done!"* or *"Cursor is done!"* when it finishes.
 
 ## Features
@@ -186,6 +187,7 @@ Sources/
   Settings.swift        Persisted settings, colours, accessories
   SettingsView.swift    The Settings window
   ClaudeHooks.swift     Hook handling plus connecting/disconnecting Claude Code
+  NowPlaying.swift      Reads what's playing and picks a reaction (Quran, sad, happy, groove)
 cursor/mac-buddy-cursor.py  Connects Cursor's agent to the buddy (adds hooks to ~/.cursor/hooks.json)
 scripts/make-release.sh   Builds MacBuddy.dmg + MacBuddy.zip for a GitHub release
 scripts/get.sh            The one-line installer

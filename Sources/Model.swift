@@ -75,6 +75,10 @@ final class BuddyModel: ObservableObject {
     @Published private(set) var doneAgent: Agent = .claude
     /// Cursor when it's the app you're using right now, else nil.
     @Published private(set) var focusAgent: Agent?
+    /// What's playing right now (song or video title), and how the buddy feels about it.
+    @Published private(set) var nowPlaying: String?
+    @Published private(set) var vibe: Vibe?
+    private var checkingMusic = false
 
     /// Pupil offset toward the cursor, updated by the app delegate.
     var cursorLook = CGSize.zero
@@ -176,6 +180,27 @@ final class BuddyModel: ObservableObject {
             || front?.bundleIdentifier == "com.todesktop.230313mzl4w4u92"
         let newFocus: Agent? = cursorInFront ? .cursor : nil
         if focusAgent != newFocus { focusAgent = newFocus }
+    }
+
+    /// Checks what's playing (called every few seconds) and picks a reaction.
+    func checkMusic() {
+        guard settings.reactToMusic else {
+            if nowPlaying != nil { nowPlaying = nil; vibe = nil }
+            return
+        }
+        guard !checkingMusic else { return }
+        checkingMusic = true
+        NowPlaying.check { [weak self] title in
+            guard let self else { return }
+            self.checkingMusic = false
+            let newVibe = title.map(NowPlaying.vibe(for:))
+            if self.nowPlaying != title { self.nowPlaying = title }
+            if self.vibe != newVibe { self.vibe = newVibe }
+            if title != nil {
+                self.lastActivity = Date()   // music keeps the buddy awake
+                if self.mood == .sleeping { self.mood = .idle }
+            }
+        }
     }
 
     /// Which agent's look the buddy wears: whoever is working, whoever just finished,

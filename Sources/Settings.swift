@@ -123,6 +123,7 @@ final class BuddySettings: ObservableObject {
     @Published var sleepMinutes = 10.0 { didSet { save(sleepMinutes, "sleepMinutes") } }
     @Published var alwaysOnTop = true { didSet { save(alwaysOnTop, "alwaysOnTop") } }
     @Published var allSpaces = true { didSet { save(allSpaces, "allSpaces") } }
+    @Published var reactToMusic = true { didSet { save(reactToMusic, "reactToMusic") } }
 
     // Claude Code
     @Published var showBubble = true { didSet { save(showBubble, "showBubble") } }
@@ -155,6 +156,7 @@ final class BuddySettings: ObservableObject {
         sleepMinutes = v("sleepMinutes", 10.0)
         alwaysOnTop = v("alwaysOnTop", true)
         allSpaces = v("allSpaces", true)
+        reactToMusic = v("reactToMusic", true)
         showBubble = v("showBubble", true)
         showProject = v("showProject", true)
         celebrate = v("celebrate", true)

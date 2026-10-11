@@ -102,7 +102,7 @@ struct BubbleView: View {
 // MARK: - Character
 
 enum EyeStyle { case open(Double), happy, closed, dizzy }
-enum MouthStyle { case smile, grin, oh, focus, snore }
+enum MouthStyle { case smile, grin, oh, focus, snore, frown }
 
 struct Pose {
     var lift = 0.0
@@ -134,6 +134,8 @@ struct CharacterView: View {
     var agentTint: Color? = nil
     /// Which agent's mark goes on the laptop screen (a code symbol for Cursor).
     var screenAgent: Agent? = nil
+    /// How it reacts to what you're listening to (only while otherwise idle).
+    var vibe: Vibe? = nil
 
     private var limb: Color { style.limb.color }
 
@@ -212,7 +214,9 @@ struct CharacterView: View {
             p.mouth = .snore
         }
 
-        if let look = style.look { p.look = look }
+        if mood == .idle, let vibe { applyVibe(vibe, to: &p) }
+
+        if let look = style.look, vibe != .quran { p.look = look }
 
         if let reaction {
             let r = reaction.elapsed
@@ -412,6 +416,13 @@ struct CharacterView: View {
             }
         case .snore:
             Ellipse().fill(Palette.ink).frame(width: 5 + 2 * sin(t * 1.2), height: 5 + 2 * sin(t * 1.2))
+        case .frown:
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 5))
+                path.addQuadCurve(to: CGPoint(x: 12, y: 5), control: CGPoint(x: 6, y: -1))
+            }
+            .stroke(Palette.ink, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            .frame(width: 12, height: 5)
         }
     }
 
@@ -512,6 +523,15 @@ struct CharacterView: View {
 
     @ViewBuilder
     private var effectsBehind: some View {
+        if mood == .idle, vibe == .quran {
+            // A soft, slow glow while listening.
+            Circle()
+                .fill(RadialGradient(colors: [Color(red: 1, green: 0.9, blue: 0.6).opacity(0.35), .clear],
+                                     center: .center, startRadius: 10, endRadius: 75))
+                .frame(width: 150, height: 150)
+                .scaleEffect(1 + 0.05 * sin(t * 0.9))
+                .offset(y: 4)
+        }
         if mood == .done {
             ForEach(0..<5, id: \.self) { i in
                 let angle = Double(i) / 5 * 2 * .pi + t * 0.8
@@ -538,6 +558,28 @@ struct CharacterView: View {
                     .opacity(sin(phase * .pi) * work.presence)
                     .offset(x: (i == 1 ? 48 : -48) + sin(phase * 6) * 4, y: 20 - phase * 70)
             }
+        }
+        if mood == .idle, let vibe, vibe == .happy || vibe == .groove {
+            let colors = [Color(red: 1, green: 0.45, blue: 0.7), Color(red: 0.55, green: 0.5, blue: 1),
+                          Color(red: 0.3, green: 0.75, blue: 1.0)]
+            let speed = vibe == .happy ? 0.75 : 0.45
+            ForEach(0..<3, id: \.self) { i in
+                let phase = (t * speed + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                Image(systemName: i == 1 ? "music.note" : "music.quarternote.3")
+                    .font(.system(size: 11 + phase * 5, weight: .bold))
+                    .foregroundStyle(colors[i])
+                    .opacity(sin(phase * .pi))
+                    .offset(x: (i == 1 ? 46 : -46) + sin(phase * 7) * 5, y: 10 - phase * 70)
+            }
+        }
+        if mood == .idle, vibe == .sad {
+            // A tear rolls down now and then.
+            let phase = (t * 0.33).truncatingRemainder(dividingBy: 1)
+            Image(systemName: "drop.fill")
+                .font(.system(size: 7))
+                .foregroundStyle(Color(red: 0.45, green: 0.7, blue: 1.0))
+                .opacity(phase < 0.6 ? sin(phase / 0.6 * .pi) : 0)
+                .offset(x: -19, y: 2 + phase * 40)
         }
         if mood == .sleeping {
             ForEach(0..<3, id: \.self) { i in
@@ -576,6 +618,7 @@ struct BuddyStack: View {
     let style: BuddyStyle
     var agentTint: Color? = nil
     var screenAgent: Agent? = nil
+    var vibe: Vibe? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -589,7 +632,7 @@ struct BuddyStack: View {
             .animation(.spring(duration: 0.3, bounce: 0.4), value: bubble)
 
             CharacterView(mood: mood, t: t, reaction: reaction, style: style, agentTint: agentTint,
-                          screenAgent: screenAgent)
+                          screenAgent: screenAgent, vibe: vibe)
         }
         .frame(width: BuddyLayout.window.width, height: BuddyLayout.window.height, alignment: .bottom)
     }
@@ -627,6 +670,22 @@ struct BuddyView: View {
     @ObservedObject var model: BuddyModel
     @ObservedObject var settings: BuddySettings
 
+    static func vibeBubble(_ vibe: Vibe?, title: String?) -> BubbleInfo? {
+        guard let vibe else { return nil }
+        let song = title.map { $0.count > 30 ? String($0.prefix(28)) + "…" : $0 } ?? ""
+        switch vibe {
+        case .quran:
+            return BubbleInfo(text: "Listening carefully…", icon: "book.closed.fill",
+                              tint: Color(red: 0.2, green: 0.6, blue: 0.4))
+        case .sad:
+            return BubbleInfo(text: song, icon: "cloud.rain.fill", tint: Color(red: 0.4, green: 0.6, blue: 0.95))
+        case .happy:
+            return BubbleInfo(text: song, icon: "music.note", tint: Color(red: 1, green: 0.45, blue: 0.7))
+        case .groove:
+            return BubbleInfo(text: song, icon: "headphones", tint: Palette.accent)
+        }
+    }
+
     /// Turns the whole buddy blue (with headphones) for Cursor; Claude keeps your chosen look.
     static func themed(_ style: BuddyStyle, for agent: Agent?) -> BuddyStyle {
         guard agent == .cursor else { return style }
@@ -644,17 +703,69 @@ struct BuddyView: View {
             let bubble = model.activePhrase(at: now).map { BubbleInfo(text: $0) }
                 ?? BuddyStack.bubble(for: model.mood, projects: model.projects, settings: settings,
                                      agents: model.agents, doneAgent: model.doneAgent)
+                ?? (model.mood == .idle && settings.showBubble ? Self.vibeBubble(model.vibe, title: model.nowPlaying) : nil)
             // With both agents busy, the antenna takes turns between their colors.
             let agents = model.agents
             let tint: Color? = agents.isEmpty ? nil
                 : agents[Int(now.timeIntervalSinceReferenceDate / 1.5) % agents.count].tint
             BuddyStack(bubble: bubble, mood: model.mood, t: t, reaction: model.reaction(at: now),
                        style: Self.themed(settings.style(look: model.cursorLook), for: model.themeAgent),
-                       agentTint: tint, screenAgent: model.themeAgent)
+                       agentTint: tint, screenAgent: model.themeAgent, vibe: model.vibe)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,
                        height: BuddyLayout.window.height * settings.scale)
+        }
+    }
+}
+
+// MARK: - Reacting to music
+
+extension CharacterView {
+    func applyVibe(_ vibe: Vibe, to p: inout Pose) {
+        switch vibe {
+        case .quran:
+            // Perfectly still and respectful: eyes closed, hands together, head slightly bowed.
+            p.squash = 1 + 0.012 * sin(t * 0.9)
+            p.leftArm = -28
+            p.rightArm = 28
+            p.tilt = 0
+            p.eyes = .closed
+            p.mouth = .smile
+            p.antenna = Color(red: 0.55, green: 0.85, blue: 0.65)
+            p.antennaGlow = 0.35 + 0.15 * sin(t * 0.9)
+        case .sad:
+            p.squash = 0.97 + 0.01 * sin(t * 0.8)
+            p.tilt = sin(t * 0.8) * 3
+            p.leftArm = 3
+            p.rightArm = -3
+            p.look = CGSize(width: 0, height: 2)
+            p.eyes = .open(0.55)
+            p.mouth = .frown
+            p.antenna = Color(red: 0.45, green: 0.6, blue: 0.95)
+            p.antennaGlow = 0.25
+        case .happy:
+            p.lift = abs(sin(t * 5)) * 9
+            p.squash = 1 + 0.05 * sin(t * 10)
+            p.tilt = sin(t * 2.5) * 8
+            p.leftArm = 120 + sin(t * 5) * 25
+            p.rightArm = -120 + sin(t * 5) * 25
+            p.leftFoot = max(0, sin(t * 5)) * 4
+            p.rightFoot = max(0, -sin(t * 5)) * 4
+            p.eyes = .happy
+            p.mouth = .grin
+            p.antenna = Color(red: 1, green: 0.45, blue: 0.7)
+            p.antennaGlow = 0.5 + 0.5 * abs(sin(t * 5))
+        case .groove:
+            // Nodding along to the beat.
+            p.squash = 1 + 0.04 * sin(t * 6)
+            p.tilt = sin(t * 3) * 4
+            p.leftArm = 20 + sin(t * 6) * 8
+            p.rightArm = -20 + sin(t * 6) * 8
+            p.eyes = sin(t * 3) > 0.6 ? .closed : .happy
+            p.mouth = .smile
+            p.antenna = Color(red: 0.55, green: 0.5, blue: 1)
+            p.antennaGlow = 0.4 + 0.4 * abs(sin(t * 6))
         }
     }
 }

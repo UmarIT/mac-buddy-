@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -26,6 +27,10 @@ enum Agent: Equatable {
 
     /// A generic SF Symbol shown in the bubble (not a brand logo).
     var icon: String { self == .cursor ? "cursorarrow.rays" : "sparkle" }
+
+    /// Whole-body colors while this agent is working or in front (Claude keeps your own colors).
+    static let cursorBody = RGB(hex: "4A8FE7")!
+    static let cursorLimb = RGB(hex: "2F67B8")!
 
     /// Bubble icon and antenna color while this agent works.
     var tint: Color {
@@ -68,6 +73,8 @@ final class BuddyModel: ObservableObject {
     @Published private(set) var agents: [Agent] = []
     /// The agent that finished most recently (for the "done" bubble).
     @Published private(set) var doneAgent: Agent = .claude
+    /// Cursor when it's the app you're using right now, else nil.
+    @Published private(set) var focusAgent: Agent?
     /// Voice conversation with you (listening / thinking / answering).
     @Published private(set) var voice: VoiceState = .off
 
@@ -179,6 +186,20 @@ final class BuddyModel: ObservableObject {
         if mood != newMood { mood = newMood }
         if projects != newProjects { projects = newProjects }
         if agents != newAgents { agents = newAgents }
+
+        let front = NSWorkspace.shared.frontmostApplication
+        let cursorInFront = front?.localizedName == "Cursor"
+            || front?.bundleIdentifier == "com.todesktop.230313mzl4w4u92"
+        let newFocus: Agent? = cursorInFront ? .cursor : nil
+        if focusAgent != newFocus { focusAgent = newFocus }
+    }
+
+    /// Which agent's look the buddy wears: whoever is working, whoever just finished,
+    /// otherwise Cursor while you're using it.
+    var themeAgent: Agent? {
+        if let working = agents.first { return working }
+        if mood == .done { return doneAgent }
+        return focusAgent
     }
 
     func setVoice(_ state: VoiceState) {

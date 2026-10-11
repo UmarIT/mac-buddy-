@@ -31,7 +31,7 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 - 💬 **It answers questions** with Apple's free, private on-device AI (macOS 26 with Apple Intelligence turned on). If that isn't available, it uses Claude Code or Cursor's agent when one is installed.
 - 🗣️ **It speaks.** It says *"Cursor is done!"*, *"Claude is done!"*, *"Claude needs your OK!"* and its click reactions with your Mac's built-in voice. Toggle it from the right-click menu.
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent too, not just Claude Code.
-- 🎨 **Knows who's working.** Claude shows a ✦ sparkle and an orange antenna, Cursor shows a pointer icon and a blue antenna. The bubble says *"Claude · my-app"* or *"Cursor · my-app"*.
+- 🎨 **Knows who's working.** The whole buddy turns **blue** while Cursor is working or while you're using Cursor, and stays orange (your chosen colors) for Claude. The bubble says *"Claude · my-app"* or *"Cursor · my-app"*.
 
 No API key or paid account is needed for commands, or for questions on Macs with Apple Intelligence.
 

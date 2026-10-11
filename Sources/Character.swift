@@ -614,6 +614,15 @@ struct BuddyView: View {
     @ObservedObject var model: BuddyModel
     @ObservedObject var settings: BuddySettings
 
+    /// Turns the whole buddy blue for Cursor; Claude keeps your chosen colors.
+    static func themed(_ style: BuddyStyle, for agent: Agent?) -> BuddyStyle {
+        guard agent == .cursor else { return style }
+        var s = style
+        s.body = Agent.cursorBody
+        s.limb = Agent.cursorLimb
+        return s
+    }
+
     /// While you're chatting, look busy when thinking and calm otherwise.
     static func displayMood(_ mood: Mood, voice: VoiceState) -> Mood {
         switch voice {
@@ -652,7 +661,8 @@ struct BuddyView: View {
             let tint: Color? = agents.isEmpty ? nil
                 : agents[Int(now.timeIntervalSinceReferenceDate / 1.5) % agents.count].tint
             BuddyStack(bubble: bubble, mood: mood, t: t, reaction: model.reaction(at: now),
-                       style: settings.style(look: model.cursorLook),
+                       style: Self.themed(settings.style(look: model.cursorLook),
+                                          for: model.voice.isActive ? nil : model.themeAgent),
                        agentTint: model.voice == .thinking ? Optional(Agent.claude.tint) : tint)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)

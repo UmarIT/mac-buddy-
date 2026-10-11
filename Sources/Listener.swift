@@ -137,7 +137,9 @@ final class Listener {
     // nonisolated so the closures they build don't assume the main thread, and they hop back
     // to the main thread before touching any state.
 
-    nonisolated private static func onMain<T>(_ body: @escaping @MainActor (T) -> Void) -> (T) -> Void {
+    nonisolated private static func onMain<T: Sendable>(
+        _ body: @escaping @MainActor @Sendable (T) -> Void
+    ) -> @Sendable (T) -> Void {
         { value in DispatchQueue.main.async { MainActor.assumeIsolated { body(value) } } }
     }
 
@@ -146,8 +148,7 @@ final class Listener {
     }
 
     nonisolated private static func resultHandler(for owner: Listener) -> (SFSpeechRecognitionResult?, Error?) -> Void {
-        weak var owner = owner
-        return { result, error in
+        return { [weak owner] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
             let failed = error != nil

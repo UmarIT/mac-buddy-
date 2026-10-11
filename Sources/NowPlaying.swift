@@ -190,14 +190,29 @@ enum NowPlaying {
     }
 
     private static func sport(in title: String, url: String) -> Sport? {
-        let t = words(title)
+        // Look at the title and the words in the web address (".../sri-lanka-tour-of-pakistan-t20i/...").
+        let path = url.components(separatedBy: "?").first ?? url
+        let t = words(title + " " + path)
         func has(_ list: [String]) -> Bool { list.contains { t.contains(" \($0) ") } }
         func site(_ list: [String]) -> Bool { list.contains { url.contains($0) } }
 
-        if has(["cricket", "psl", "ipl", "bbl", "cpl", "t20", "t20i", "odi", "cricinfo", "cricbuzz", "wicket", "wickets",
-                "innings", "babar", "rizwan", "shaheen", "kohli", "rohit", "pak vs", "ind vs"])
-            || t.contains(" test match ") || t.contains(" pak vs ") || t.contains(" ind vs ") || t.contains(" vs pak ")
-            || t.contains(" vs ind ") || site(["cricinfo", "cricbuzz", "icc-cricket", "psl-t20", "iplt20"]) {
+        // Cricket teams; "Pakistan vs Sri Lanka" style matches count as cricket.
+        let teams = ["pak", "pakistan", "ind", "india", "sl", "sri lanka", "aus", "australia", "eng", "england",
+                     "nz", "new zealand", "ban", "bangladesh", "afg", "afghanistan", "wi", "west indies",
+                     "sa", "south africa", "zim", "zimbabwe", "ire", "ireland", "ned", "netherlands", "uae", "usa",
+                     "lahore qalandars", "karachi kings", "islamabad united", "peshawar zalmi", "quetta gladiators",
+                     "multan sultans"]
+        let teamMatch = teams.contains { a in teams.contains { b in a != b && t.contains(" \(a) vs \(b) ") } }
+            || teams.contains { a in teams.contains { b in a != b && t.contains(" \(a) v \(b) ") } }
+
+        if has(["cricket", "psl", "ipl", "bbl", "cpl", "t20", "t20i", "t20is", "odi", "odis", "cricinfo", "cricbuzz",
+                "wicket", "wickets", "innings", "babar", "rizwan", "shaheen", "fakhar", "kohli", "rohit", "bumrah",
+                "ashes", "test match", "asia cup", "champions trophy"])
+            || teamMatch
+            // A cricket score like "PAK 44/0 (5.4)" (runs/wickets and overs).
+            || title.range(of: #"\d{1,3}/\d{1,2}\s*\(\d{1,2}(\.\d)?"#, options: .regularExpression) != nil
+            || site(["cricinfo", "cricbuzz", "icc-cricket", "psl-t20", "iplt20", "pcb.com.pk", "ptvsports",
+                     "willow.tv", "fancode", "crictime", "smartcric"]) {
             return .cricket
         }
         if has(["football", "soccer", "fifa", "uefa", "epl", "laliga", "bundesliga", "messi", "ronaldo", "neymar",

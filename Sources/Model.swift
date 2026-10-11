@@ -190,14 +190,13 @@ final class BuddyModel: ObservableObject {
         }
         guard !checkingMusic else { return }
         checkingMusic = true
-        NowPlaying.check { [weak self] title in
+        NowPlaying.check { [weak self] activity in
             guard let self else { return }
             self.checkingMusic = false
-            let newVibe = title.map(NowPlaying.vibe(for:))
-            if self.nowPlaying != title { self.nowPlaying = title }
-            if self.vibe != newVibe { self.vibe = newVibe }
-            if title != nil {
-                self.lastActivity = Date()   // music keeps the buddy awake
+            if self.nowPlaying != activity?.title { self.nowPlaying = activity?.title }
+            if self.vibe != activity?.vibe { self.vibe = activity?.vibe }
+            if activity != nil {
+                self.lastActivity = Date()   // music, sports or work keeps the buddy awake
                 if self.mood == .sleeping { self.mood = .idle }
             }
         }

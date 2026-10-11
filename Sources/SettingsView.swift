@@ -213,11 +213,11 @@ private struct BehaviorTab: View {
             }
 
             Section {
-                Toggle("React to music and videos you play", isOn: $settings.reactToMusic)
+                Toggle("React to music, sports and work", isOn: $settings.reactToMusic)
             } header: {
                 Text("Music")
             } footer: {
-                Text("Reads the title of what's playing in Music, Spotify, or a YouTube tab in Safari, Chrome, Brave or Edge, then dances, nods along, gets sad, or listens quietly to Quran recitation. It doesn't record any audio. macOS asks once per app for permission.")
+                Text("Reads the title and address of your tabs in Safari, Chrome, Brave or Edge, and what's playing in Music or Spotify. It dances, nods along, gets sad or romantic, listens quietly to Quran, cheers for cricket and other sports, and works along with you on work sites and apps. It doesn't record audio or look at your screen. macOS asks once per app for permission.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

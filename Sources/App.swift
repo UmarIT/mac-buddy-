@@ -274,7 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let follow = menu.addItem(withTitle: "Eyes Follow Cursor", action: #selector(toggleFollow), keyEquivalent: "")
         follow.target = self
         follow.state = settings.followCursor ? .on : .off
-        let music = menu.addItem(withTitle: "React to Music", action: #selector(toggleMusic), keyEquivalent: "")
+        let music = menu.addItem(withTitle: "React to Music, Sports & Work", action: #selector(toggleMusic), keyEquivalent: "")
         music.target = self
         music.state = settings.reactToMusic ? .on : .off
         menu.addItem(.separator())

@@ -28,7 +28,9 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent as well as Claude Code.
 - 🔵 **Cursor looks different.** While Cursor's agent works, or whenever Cursor is the app you're using, the buddy turns blue, puts on headphones and shows a `</>` symbol on its laptop. With Claude it keeps its usual orange look.
-- 🎵 **Reacts to your music.** Play something in Music, Spotify, or on YouTube in Safari, Chrome, Brave or Edge and the buddy reads the title: it **dances** to party and wedding songs, **gets sad** (with a little tear) at sad songs, **blushes with floating hearts** for romantic songs, **nods along** to everything else, and for **Quran recitation** it goes still, closes its eyes and listens quietly. It only reads titles and never records audio. Turn it off from the right-click menu (**React to Music**).
+- 🎵 **Reacts to your music.** Play something in Music, Spotify, or on YouTube in Safari, Chrome, Brave or Edge and the buddy reads the title: it **dances** to party and wedding songs, **gets sad** (with a little tear) at sad songs, **blushes with floating hearts** for romantic songs, **nods along** to everything else, and for **Quran recitation** it goes still, closes its eyes and listens quietly. It only reads titles and never records audio. Turn it off from the right-click menu (**React to Music, Sports & Work**).
+- 🏏 **Watches sports with you.** Open cricket (PSL, IPL, a match on YouTube, Cricinfo or Cricbuzz), football, basketball, tennis, hockey, F1 or boxing/UFC and the buddy watches excitedly with the sport's ball bouncing beside it, jumping up to cheer every few seconds.
+- 💻 **Works along with you.** When the tab in front is a work site (Google Docs/Sheets, Gmail, GitHub, Notion, Figma, Jira, Upwork, Fiverr, Canva, Slack…) or a work app like VS Code, Xcode, Excel or Terminal is in front, the buddy types on its laptop: *"Working · Google Docs"*.
 - 🏷️ **The bubble says who's working**: *"Claude · my-app"* or *"Cursor · my-app"*, and *"Claude is done!"* or *"Cursor is done!"* when it finishes.
 
 ## Features
@@ -187,7 +189,7 @@ Sources/
   Settings.swift        Persisted settings, colours, accessories
   SettingsView.swift    The Settings window
   ClaudeHooks.swift     Hook handling plus connecting/disconnecting Claude Code
-  NowPlaying.swift      Reads what's playing and picks a reaction (Quran, sad, happy, groove)
+  NowPlaying.swift      Reads what you're playing, watching or working on and picks a reaction
 cursor/mac-buddy-cursor.py  Connects Cursor's agent to the buddy (adds hooks to ~/.cursor/hooks.json)
 scripts/make-release.sh   Builds MacBuddy.dmg + MacBuddy.zip for a GitHub release
 scripts/get.sh            The one-line installer

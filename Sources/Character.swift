@@ -591,6 +591,24 @@ struct CharacterView: View {
                     .offset(x: side * (40 + Double(i) * 4) + sin(phase * 6 + Double(i)) * 8, y: 14 - phase * 80)
             }
         }
+        if mood == .idle, case .sport(let sport)? = vibe {
+            // The sport's ball bounces beside the buddy; a little burst of sparkles when it cheers.
+            let bounce = abs(sin(t * 3.2))
+            Image(systemName: sport.icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(sport == .cricket ? Color(red: 0.85, green: 0.15, blue: 0.2) : Palette.ink.opacity(0.85))
+                .rotationEffect(.degrees(t * 120))
+                .offset(x: 56, y: 38 - bounce * 26)
+            if CharacterView.cheering(at: t) {
+                ForEach(0..<4, id: \.self) { i in
+                    let angle = Double(i) / 4 * 2 * .pi + t * 2
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(red: 1, green: 0.78, blue: 0.2))
+                        .offset(x: cos(angle) * 54, y: sin(angle) * 30 - 30)
+                }
+            }
+        }
         if mood == .idle, vibe == .sad {
             // A tear rolls down now and then.
             let phase = (t * 0.33).truncatingRemainder(dividingBy: 1)
@@ -704,6 +722,11 @@ struct BuddyView: View {
             return BubbleInfo(text: song, icon: "music.note", tint: Color(red: 1, green: 0.45, blue: 0.7))
         case .groove:
             return BubbleInfo(text: song, icon: "headphones", tint: Palette.accent)
+        case .sport(let sport):
+            return BubbleInfo(text: sport == .other ? song : "Watching \(sport.name)!", icon: sport.icon,
+                              tint: Color(red: 0.2, green: 0.65, blue: 0.3))
+        case .work(let place):
+            return BubbleInfo(text: "Working · \(place)", icon: "laptopcomputer", tint: Palette.accent, spinner: true)
         }
     }
 
@@ -729,9 +752,14 @@ struct BuddyView: View {
             let agents = model.agents
             let tint: Color? = agents.isEmpty ? nil
                 : agents[Int(now.timeIntervalSinceReferenceDate / 1.5) % agents.count].tint
-            BuddyStack(bubble: bubble, mood: model.mood, t: t, reaction: model.reaction(at: now),
+            // A work tab or app in front: the buddy works along with you.
+            let workingWithYou: Bool = {
+                if model.mood == .idle, case .work(_)? = model.vibe { return true }
+                return false
+            }()
+            BuddyStack(bubble: bubble, mood: workingWithYou ? .working : model.mood, t: t, reaction: model.reaction(at: now),
                        style: Self.themed(settings.style(look: model.cursorLook), for: model.themeAgent),
-                       agentTint: tint, screenAgent: model.themeAgent, vibe: model.vibe)
+                       agentTint: tint, screenAgent: model.themeAgent, vibe: workingWithYou ? nil : model.vibe)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,
@@ -743,6 +771,9 @@ struct BuddyView: View {
 // MARK: - Reacting to music
 
 extension CharacterView {
+    /// Cheers for about a second every five seconds while watching sports.
+    static func cheering(at t: Double) -> Bool { t.truncatingRemainder(dividingBy: 5) < 1.3 }
+
     func applyVibe(_ vibe: Vibe, to p: inout Pose) {
         switch vibe {
         case .quran:
@@ -767,6 +798,29 @@ extension CharacterView {
             p.blush = 0.8 + 0.2 * sin(t * 2)
             p.antenna = Color(red: 1, green: 0.4, blue: 0.6)
             p.antennaGlow = 0.6 + 0.4 * abs(sin(t * 2.4))   // a little heartbeat
+        case .sport(_):
+            if Self.cheering(at: t) {
+                // Jumps up and cheers!
+                let c = t.truncatingRemainder(dividingBy: 5) / 1.3
+                p.lift = sin(c * .pi) * 22
+                p.leftArm = 155 + sin(t * 18) * 10
+                p.rightArm = -155 - sin(t * 18) * 10
+                p.eyes = .happy
+                p.mouth = .grin
+                p.antennaGlow = 1
+            } else {
+                // Glued to the game: leaning in, eyes wide, fists clenched.
+                p.tilt = -3 + sin(t * 1.5)
+                p.eyeScale = 1.1
+                p.look = CGSize(width: -2.5, height: -0.5)
+                p.leftArm = -20 + sin(t * 9) * 3
+                p.rightArm = 20 - sin(t * 9) * 3
+                p.mouth = sin(t * 0.9) > 0.7 ? .oh : .focus
+                p.antennaGlow = 0.5
+            }
+            p.antenna = Color(red: 0.3, green: 0.85, blue: 0.4)
+        case .work(_):
+            break   // drawn as the regular "working" routine
         case .sad:
             p.squash = 0.97 + 0.01 * sin(t * 0.8)
             p.tilt = sin(t * 0.8) * 3

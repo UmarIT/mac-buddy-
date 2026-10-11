@@ -132,6 +132,8 @@ struct CharacterView: View {
     let style: BuddyStyle
     /// Antenna color while working (Claude orange / Cursor blue); nil keeps the default.
     var agentTint: Color? = nil
+    /// Which agent's mark goes on the laptop screen (a generic pointer for Cursor).
+    var screenAgent: Agent? = nil
 
     private var limb: Color { style.limb.color }
 
@@ -487,12 +489,22 @@ struct CharacterView: View {
                 .fill(LinearGradient(colors: [Color(white: 0.88), Color(white: 0.74)],
                                      startPoint: .top, endPoint: .bottom))
                 .frame(width: 56, height: 34)
-                .overlay(
-                    Image(systemName: "asterisk")
-                        .font(.system(size: 11, weight: .black))
-                        .foregroundStyle(style.body.color)
-                        .rotationEffect(.degrees(t * 90))
-                )
+                .overlay {
+                    if screenAgent == .cursor {
+                        // A generic pointer that "clicks" now and then (not Cursor's logo).
+                        let click = max(0, sin(t * 4))
+                        Image(systemName: "cursorarrow")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(style.body.color)
+                            .scaleEffect(1 - 0.15 * click)
+                            .offset(x: 1, y: -1 + 1.5 * click)
+                    } else {
+                        Image(systemName: "asterisk")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(style.body.color)
+                            .rotationEffect(.degrees(t * 90))
+                    }
+                }
             Capsule().fill(Color(white: 0.62)).frame(width: 68, height: 5)
         }
     }
@@ -564,6 +576,7 @@ struct BuddyStack: View {
     let reaction: Reaction?
     let style: BuddyStyle
     var agentTint: Color? = nil
+    var screenAgent: Agent? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -576,7 +589,8 @@ struct BuddyStack: View {
             .frame(width: BuddyLayout.window.width, height: BuddyLayout.bubbleHeight, alignment: .bottom)
             .animation(.spring(duration: 0.3, bounce: 0.4), value: bubble)
 
-            CharacterView(mood: mood, t: t, reaction: reaction, style: style, agentTint: agentTint)
+            CharacterView(mood: mood, t: t, reaction: reaction, style: style, agentTint: agentTint,
+                          screenAgent: screenAgent)
         }
         .frame(width: BuddyLayout.window.width, height: BuddyLayout.window.height, alignment: .bottom)
     }
@@ -663,7 +677,8 @@ struct BuddyView: View {
             BuddyStack(bubble: bubble, mood: mood, t: t, reaction: model.reaction(at: now),
                        style: Self.themed(settings.style(look: model.cursorLook),
                                           for: model.voice.isActive ? nil : model.themeAgent),
-                       agentTint: model.voice == .thinking ? Optional(Agent.claude.tint) : tint)
+                       agentTint: model.voice == .thinking ? Optional(Agent.claude.tint) : tint,
+                       screenAgent: model.voice.isActive ? nil : model.themeAgent)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,

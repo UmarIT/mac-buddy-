@@ -4,6 +4,7 @@ import AppKit
 enum Vibe: Equatable {
     case quran   // still, eyes closed, listening respectfully
     case sad     // droopy, slow sway, a tear now and then
+    case romantic // blushing, dreamy, floating hearts
     case happy   // dancing
     case groove  // nodding along
 }
@@ -126,6 +127,12 @@ enum NowPlaying {
                 "painful", "miss", "missing", "judai", "bewafa", "tanha", "tanhai", "dard", "rona", "udaas", "udas",
                 "gham", "alvida", "emotional", "toota", "tootay", "hurt", "goodbye", "lost", "dukh", "aansu"]) {
             return .sad
+        }
+        if has(["love", "lover", "romantic", "romance", "ishq", "pyar", "pyaar", "mohabbat", "muhabbat", "dil",
+                "jaan", "jaana", "sanam", "mehboob", "mehbooba", "piya", "saiyaan", "saiyan", "humsafar", "valentine",
+                "darling", "kesariya", "raanjhana", "ranjha", "heer", "aashiqui", "ashiqui", "aashiq", "deewana",
+                "diwana", "chahat", "pehli", "nazar", "beloved", "perfect", "kiss", "crush", "jaanu", "hamsafar"]) {
+            return .romantic
         }
         if has(["party", "dance", "dancing", "happy", "celebration", "celebrate", "wedding", "shaadi", "shadi",
                 "mehndi", "bhangra", "dhol", "remix", "club", "birthday", "upbeat", "disco", "edm", "workout",

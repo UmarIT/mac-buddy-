@@ -120,6 +120,8 @@ struct Pose {
     var eyeScale = 1.0
     var eyes = EyeStyle.open(1)
     var mouth = MouthStyle.smile
+    /// Extra rosy cheeks (0…1), e.g. for romantic songs.
+    var blush = 0.0
     var antenna: Color?
     var antennaGlow = 0.0
 }
@@ -326,8 +328,10 @@ struct CharacterView: View {
             eye(p).offset(x: -17, y: -6)
             eye(p).offset(x: 17, y: -6)
             if style.cheeks {
-                Ellipse().fill(Palette.cheek.opacity(0.45)).frame(width: 12, height: 7).offset(x: -30, y: 9)
-                Ellipse().fill(Palette.cheek.opacity(0.45)).frame(width: 12, height: 7).offset(x: 30, y: 9)
+                Ellipse().fill(Palette.cheek.opacity(0.45 + 0.45 * p.blush))
+                    .frame(width: 12 + 5 * p.blush, height: 7 + 3 * p.blush).offset(x: -30, y: 9)
+                Ellipse().fill(Palette.cheek.opacity(0.45 + 0.45 * p.blush))
+                    .frame(width: 12 + 5 * p.blush, height: 7 + 3 * p.blush).offset(x: 30, y: 9)
             }
             mouth(p.mouth).offset(y: 15)
             if style.accessory == .glasses {
@@ -572,6 +576,21 @@ struct CharacterView: View {
                     .offset(x: (i == 1 ? 46 : -46) + sin(phase * 7) * 5, y: 10 - phase * 70)
             }
         }
+        if mood == .idle, vibe == .romantic {
+            // Hearts drift up and fade, gently swaying.
+            let pinks = [Color(red: 1, green: 0.35, blue: 0.5), Color(red: 1, green: 0.55, blue: 0.7),
+                         Color(red: 0.95, green: 0.25, blue: 0.4), Color(red: 1, green: 0.7, blue: 0.8)]
+            ForEach(0..<4, id: \.self) { i in
+                let phase = (t * 0.35 + Double(i) / 4).truncatingRemainder(dividingBy: 1)
+                let side: Double = i % 2 == 0 ? -1 : 1
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 9 + phase * 9 + Double(i % 2) * 3))
+                    .foregroundStyle(pinks[i])
+                    .opacity(sin(phase * .pi))
+                    .scaleEffect(1 + 0.15 * sin(t * 6 + Double(i)))
+                    .offset(x: side * (40 + Double(i) * 4) + sin(phase * 6 + Double(i)) * 8, y: 14 - phase * 80)
+            }
+        }
         if mood == .idle, vibe == .sad {
             // A tear rolls down now and then.
             let phase = (t * 0.33).truncatingRemainder(dividingBy: 1)
@@ -679,6 +698,8 @@ struct BuddyView: View {
                               tint: Color(red: 0.2, green: 0.6, blue: 0.4))
         case .sad:
             return BubbleInfo(text: song, icon: "cloud.rain.fill", tint: Color(red: 0.4, green: 0.6, blue: 0.95))
+        case .romantic:
+            return BubbleInfo(text: song, icon: "heart.fill", tint: Color(red: 1, green: 0.35, blue: 0.5))
         case .happy:
             return BubbleInfo(text: song, icon: "music.note", tint: Color(red: 1, green: 0.45, blue: 0.7))
         case .groove:
@@ -734,6 +755,18 @@ extension CharacterView {
             p.mouth = .smile
             p.antenna = Color(red: 0.55, green: 0.85, blue: 0.65)
             p.antennaGlow = 0.35 + 0.15 * sin(t * 0.9)
+        case .romantic:
+            // Dreamy: slow sway, shy hands together, half-closed happy eyes, rosy cheeks.
+            p.tilt = sin(t * 1.2) * 6
+            p.squash = 1 + 0.02 * sin(t * 2.4)
+            p.lift = max(0, sin(t * 1.2)) * 3
+            p.leftArm = -40 + sin(t * 2.4) * 4
+            p.rightArm = 40 - sin(t * 2.4) * 4
+            p.eyes = sin(t * 0.7) > 0.3 ? .closed : .happy
+            p.mouth = .smile
+            p.blush = 0.8 + 0.2 * sin(t * 2)
+            p.antenna = Color(red: 1, green: 0.4, blue: 0.6)
+            p.antennaGlow = 0.6 + 0.4 * abs(sin(t * 2.4))   // a little heartbeat
         case .sad:
             p.squash = 0.97 + 0.01 * sin(t * 0.8)
             p.tilt = sin(t * 0.8) * 3

@@ -27,7 +27,7 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 ## What's new in this version
 
 - 🎙️ **Talk to your buddy, for free.** Double-click it or press <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>B</kbd>, then just speak. It answers out loud.
-- 🛠️ **It does what you say**, instantly and with no account: *"open Safari"*, *"open YouTube"*, *"go to github.com"*, *"search for biryani in Lahore"*, *"play Atif Aslam on YouTube"*, *"close Chrome"*, *"volume up"* / *"mute"* / *"set volume to 40"*, *"play music"* / *"next song"*, *"set a timer for 5 minutes"*, *"take a screenshot"*, *"open my Downloads folder"*, *"what time is it?"*
+- 🛠️ **It does what you say**, instantly and with no account: *"open Safari"*, *"open YouTube"*, *"go to github.com"*, *"search for biryani in Lahore"*, *"play Atif Aslam"* (starts the top YouTube result), *"open YouTube and play a song"*, *"close Chrome"*, *"volume up"* / *"mute"* / *"set volume to 40"*, *"play music"* / *"next song"*, *"set a timer for 5 minutes"*, *"take a screenshot"*, *"open my Downloads folder"*, *"what time is it?"*
 - 💬 **It answers questions** with Apple's free, private on-device AI (macOS 26 with Apple Intelligence turned on). If that isn't available, it uses Claude Code or Cursor's agent when one is installed.
 - 🗣️ **It speaks.** It says *"Cursor is done!"*, *"Claude is done!"*, *"Claude needs your OK!"* and its click reactions with your Mac's built-in voice. Toggle it from the right-click menu.
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent too, not just Claude Code.

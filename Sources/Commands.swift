@@ -5,9 +5,46 @@ import AppKit
 @MainActor
 enum QuickCommands {
     /// Returns what to say if `text` was a command it handled, or nil to let the AI answer.
+    /// Several commands in one sentence work too: "open youtube and play a song".
     static func handle(_ text: String) -> String? {
-        let s = clean(text)
-        guard !s.isEmpty else { return nil }
+        let whole = clean(text)
+        guard !whole.isEmpty else { return nil }
+        let youTube = whole.contains("youtube")
+        var parts = split(whole)
+        // "open youtube and play X": playing X already opens YouTube.
+        if youTube, parts.contains(where: { $0.hasPrefix("play ") }) {
+            parts.removeAll { ["open youtube", "open up youtube", "go to youtube", "launch youtube", "youtube"].contains($0) }
+        }
+        let replies = parts.compactMap { handleOne($0, youTube: youTube) }
+        return replies.isEmpty ? nil : replies.joined(separator: " ")
+    }
+
+    /// Words a new command can start with, used to split "do this and do that".
+    private static let commandStarts: Set<String> = [
+        "open", "launch", "go", "play", "search", "google", "look", "lookup", "close", "quit", "exit",
+        "set", "turn", "mute", "unmute", "volume", "pause", "stop", "next", "skip", "take", "what",
+        "start", "youtube", "increase", "decrease", "lower", "make", "show", "tell",
+    ]
+
+    private static func split(_ s: String) -> [String] {
+        var pieces = [s]
+        for sep in [" and then ", " and also ", " then ", " and "] {
+            pieces = pieces.flatMap { $0.components(separatedBy: sep) }
+        }
+        // Re-join pieces that don't start a new command ("search for salt and pepper").
+        var parts: [String] = []
+        for piece in pieces.map({ clean($0) }) where !piece.isEmpty {
+            let first = piece.split(separator: " ").first.map(String.init) ?? ""
+            if parts.isEmpty || commandStarts.contains(first) {
+                parts.append(piece)
+            } else {
+                parts[parts.count - 1] += " and " + piece
+            }
+        }
+        return parts
+    }
+
+    private static func handleOne(_ s: String, youTube: Bool) -> String? {
 
         // Small talk
         if ["thanks", "thank you", "thank you buddy", "thanks buddy"].contains(s) { return "You're welcome!" }
@@ -54,11 +91,29 @@ enum QuickCommands {
         if s.contains("next song") || s.contains("next track") || s.contains("skip song") {
             return appleScript("tell application \"Music\" to next track") ? "Next song." : nil
         }
-        if s.contains("pause music") || s.contains("stop music") || s.contains("pause the music") || s == "pause" {
+        if !youTube, s.contains("pause music") || s.contains("stop music") || s.contains("pause the music") || s == "pause" {
             return appleScript("tell application \"Music\" to pause") ? "Paused." : nil
         }
-        if s.contains("play music") || s.contains("resume music") || s.contains("play some music") {
+        if !youTube, s == "play music" || s.contains("resume music") || s == "play some music" {
             return appleScript("tell application \"Music\" to play") ? "Playing music." : nil
+        }
+
+        // "play kesariya", "play a song", "play atif aslam on youtube" → starts the top YouTube result
+        if s.hasPrefix("play ") {
+            var q = String(s.dropFirst(5))
+            for tail in [" on youtube", " in youtube", " from youtube", " youtube"] where q.hasSuffix(tail) {
+                q = String(q.dropLast(tail.count))
+            }
+            for article in ["the ", "a ", "an ", "some ", "my "] where q.hasPrefix(article) {
+                q = String(q.dropFirst(article.count))
+            }
+            let generic = ["", "song", "songs", "music", "video", "videos", "something", "any song", "a song", "good song", "nice song"]
+            if generic.contains(q) {
+                playOnYouTube("top songs")
+                return "Playing some popular songs on YouTube."
+            }
+            playOnYouTube(q)
+            return "Playing \(q) on YouTube."
         }
 
         // Screenshot
@@ -71,8 +126,7 @@ enum QuickCommands {
         }
 
         // Searches: "search for cats", "google cats", "youtube cats", "play cats on youtube"
-        if let q = rest(of: s, after: ["search youtube for", "search on youtube for", "youtube search for", "youtube"])
-            ?? suffixQuery(s, prefix: "play", suffix: "on youtube") {
+        if let q = rest(of: s, after: ["search youtube for", "search on youtube for", "youtube search for", "youtube"]) {
             return open("https://www.youtube.com/results?search_query=" + encode(q)) ? "Here's YouTube for \(q)." : nil
         }
         if let q = rest(of: s, after: ["search google for", "google search for", "search for", "search", "google", "look up", "lookup"]) {
@@ -197,6 +251,29 @@ enum QuickCommands {
         if exactOnly { return nil }
         return apps.first { key($0).hasPrefix(wanted) }
             ?? apps.first { wanted.count >= 3 && key($0).contains(wanted) }
+    }
+
+    /// Opens the first YouTube result for `query` so it starts playing; falls back to the
+    /// results page if the video can't be found quickly.
+    private static func playOnYouTube(_ query: String) {
+        let search = "https://www.youtube.com/results?search_query=" + encode(query)
+        guard let url = URL(string: search) else { return }
+        var request = URLRequest(url: url, timeoutInterval: 6)
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+                         forHTTPHeaderField: "User-Agent")
+        request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            let html = data.map { String(decoding: $0, as: UTF8.self) } ?? ""
+            let target = firstVideoID(in: html).map { "https://www.youtube.com/watch?v=\($0)&autoplay=1" } ?? search
+            DispatchQueue.main.async {
+                if let link = URL(string: target) { NSWorkspace.shared.open(link) }
+            }
+        }.resume()
+    }
+
+    nonisolated private static func firstVideoID(in html: String) -> String? {
+        guard let r = html.range(of: #""videoId":"[A-Za-z0-9_-]{11}""#, options: .regularExpression) else { return nil }
+        return String(html[r].dropFirst(11).dropLast(1))   // strip "videoId":" and the closing quote
     }
 
     private static func open(_ link: String) -> Bool {

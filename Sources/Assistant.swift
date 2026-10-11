@@ -70,6 +70,11 @@ final class AssistantJob: @unchecked Sendable {
     code blocks, emoji, URLs or file paths unless they ask for them. Reply in the language they \
     spoke. If they ask you to do something on their Mac and your tools allow it, do it, then say \
     in one sentence what you did. If you can't do it, say so briefly and suggest how they could.
+    You are running on the user's macOS computer, in their home folder. To control apps and the \
+    system, use shell commands such as `open -a "App Name"`, `open "https://…"`, and `osascript` \
+    with AppleScript (for example to control Music, Finder, Safari, Notes, Reminders, Calendar \
+    or System Events). Never delete files, empty the Trash, send messages or emails, buy \
+    anything, or change system security settings unless the user clearly asked for exactly that.
     """
 
     private let question: String

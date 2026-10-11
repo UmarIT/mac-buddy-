@@ -68,7 +68,13 @@ final class VoiceBuddy {
         }
         model.setVoice(.thinking)
 
-        // 2. Questions: Apple's free on-device AI when this Mac has it…
+        // 2. "Do anything" mode: an agent that can act on the Mac (Cursor's agent or Claude Code).
+        if settings.assistantActions {
+            askAgent(question, fallbackToOnDevice: true)
+            return
+        }
+
+        // 3. Questions: Apple's free on-device AI when this Mac has it…
         if OnDeviceBrain.isAvailable {
             thinkingTask = Task { [weak self] in
                 guard let self else { return }
@@ -79,12 +85,27 @@ final class VoiceBuddy {
             return
         }
 
-        // 3. …otherwise Claude Code or Cursor's agent, if one is installed.
+        // 4. …otherwise Claude Code or Cursor's agent, if one is installed.
+        askAgent(question, fallbackToOnDevice: false)
+    }
+
+    private func askAgent(_ question: String, fallbackToOnDevice: Bool) {
         assistant.ask(question, brain: .auto, allowActions: settings.assistantActions,
                       folder: NSHomeDirectory()) { [weak self] reply, notFound in
             guard let self, self.model.voice == .thinking else { return }
             if notFound {
-                self.answer(OnDeviceBrain.unavailableReason)
+                if fallbackToOnDevice, OnDeviceBrain.isAvailable {
+                    self.thinkingTask = Task { [weak self] in
+                        guard let self else { return }
+                        let reply = await self.onDevice.ask(question)
+                        guard !Task.isCancelled, self.model.voice == .thinking else { return }
+                        self.answer(reply)
+                    }
+                } else if self.settings.assistantActions {
+                    self.answer("To do anything you ask, I need Cursor's agent. Open Terminal and install it, then run agent login. I can still do simple commands like open Safari.")
+                } else {
+                    self.answer(OnDeviceBrain.unavailableReason)
+                }
             } else if !reply.isEmpty {
                 self.answer(reply)
             }

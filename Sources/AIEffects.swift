@@ -7,10 +7,21 @@ final class AudioLevel: @unchecked Sendable {
     static let shared = AudioLevel()
     private let lock = NSLock()
     private var level = 0.0
+    private var loudest = 0.0
 
     var value: Double {
         lock.lock(); defer { lock.unlock() }
         return level
+    }
+
+    /// The loudest moment since listening started (to tell "no sound" from "not understood").
+    var peak: Double {
+        lock.lock(); defer { lock.unlock() }
+        return loudest
+    }
+
+    func startSession() {
+        lock.lock(); level = 0; loudest = 0; lock.unlock()
     }
 
     /// Called with the RMS of each audio buffer.
@@ -20,6 +31,7 @@ final class AudioLevel: @unchecked Sendable {
         let target = min(max((db + 55) / 40, 0), 1)
         lock.lock()
         level = target > level ? level * 0.4 + target * 0.6 : level * 0.85 + target * 0.15
+        loudest = max(loudest, level)
         lock.unlock()
     }
 

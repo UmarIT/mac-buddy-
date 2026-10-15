@@ -18,12 +18,16 @@ final class Listener {
     private var transcript = ""
     private var silenceTimer: Timer?
     private var limitTimer: Timer?
+    /// The last error from speech recognition, e.g. "kAFAssistantErrorDomain 1101: …".
+    private var lastError: String?
 
     /// Asks for permission the first time, then starts listening.
     func start() {
         guard !isListening else { return }
         isListening = true
         transcript = ""
+        lastError = nil
+        AudioLevel.shared.startSession()
         SFSpeechRecognizer.requestAuthorization(Self.onMain { [weak self] (status: SFSpeechRecognizerAuthorizationStatus) in
             guard let self, self.isListening else { return }
             guard status == .authorized else {
@@ -58,17 +62,18 @@ final class Listener {
     // MARK: Internals
 
     private func begin() {
-        guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else {
-            fail("Speech recognition isn't available right now. Check your internet connection.")
+        // Your Mac's language first; if that isn't supported (e.g. English (Pakistan)), US English.
+        let candidates = [SFSpeechRecognizer(), SFSpeechRecognizer(locale: Locale(identifier: "en-US"))].compactMap { $0 }
+        guard let recognizer = candidates.first(where: { $0.isAvailable }) else {
+            fail("Speech recognition isn't available right now. Check your internet connection, and that Dictation is on in System Settings, Keyboard.")
             return
         }
         self.recognizer = recognizer
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true   // keeps your voice on your Mac
-        }
+        // Let macOS use its online recognizer when the on-device one isn't downloaded.
+        request.requiresOnDeviceRecognition = false
         self.request = request
 
         let input = engine.inputNode
@@ -97,14 +102,15 @@ final class Listener {
         }
     }
 
-    fileprivate func handle(text: String?, isFinal: Bool, failed: Bool) {
+    fileprivate func handle(text: String?, isFinal: Bool, error: String?) {
         guard isListening else { return }
         if let text, !text.isEmpty, text != transcript {
             transcript = text
             onPartial?(text)
             restartSilenceTimer(after: 1.6)   // a short pause means you're done talking
         }
-        if isFinal || failed { finish() }
+        if let error { lastError = error }
+        if isFinal || error != nil { finish() }
     }
 
     private func restartSilenceTimer(after seconds: TimeInterval) {
@@ -115,9 +121,27 @@ final class Listener {
     }
 
     private func finish() {
-        let heard = transcript
+        let heard = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let peak = AudioLevel.shared.peak
+        let error = lastError
         teardown()
-        onFinish?(heard)
+        guard heard.isEmpty else {
+            onFinish?(heard)
+            return
+        }
+        // Nothing came through: say why, when we can tell.
+        let lower = (error ?? "").lowercased()
+        if lower.contains("1101") || lower.contains("1700") || lower.contains("dictation") || lower.contains("siri") {
+            Self.openSettings("x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
+            onError?("I need Dictation to understand you. I opened Keyboard settings: turn on Dictation, then try again.")
+        } else if peak < 0.12 {
+            onError?("I didn't hear anything. Check that the right microphone is selected in System Settings, Sound, Input, then try again.")
+        } else if error != nil {
+            Self.openSettings("x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
+            onError?("I heard you but couldn't turn it into words. Make sure Dictation is on in Keyboard settings, then try again.")
+        } else {
+            onFinish?("")
+        }
     }
 
     private func fail(_ message: String) {
@@ -139,9 +163,11 @@ final class Listener {
 
     /// Opens System Settings at Privacy & Security → the given pane.
     private static func openPrivacySettings(_ pane: String) {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
-            NSWorkspace.shared.open(url)
-        }
+        openSettings("x-apple.systempreferences:com.apple.preference.security?\(pane)")
+    }
+
+    private static func openSettings(_ link: String) {
+        if let url = URL(string: link) { NSWorkspace.shared.open(url) }
     }
 
     // Callbacks from Apple's frameworks arrive on background threads. These helpers are
@@ -171,9 +197,12 @@ final class Listener {
         return { [weak owner] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
-            let failed = error != nil
+            let problem = error.map { e -> String in
+                let ns = e as NSError
+                return "\(ns.domain) \(ns.code): \(ns.localizedDescription)"
+            }
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { owner?.handle(text: text, isFinal: isFinal, failed: failed) }
+                MainActor.assumeIsolated { owner?.handle(text: text, isFinal: isFinal, error: problem) }
             }
         }
     }

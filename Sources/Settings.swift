@@ -87,6 +87,10 @@ struct BuddyStyle {
     var roundness = 36.0
     /// Pupil offset toward the cursor, or nil when cursor-following is off.
     var look: CGSize?
+    /// The optional shimmering purple-blue "AI look".
+    var holo = false
+    /// Glowing LED-style eyes on a dark screen.
+    var digitalEyes = false
 
     var bodyLight: Color { body.mixed(with: .white, 0.3).color }
 }
@@ -111,6 +115,8 @@ final class BuddySettings: ObservableObject {
     @Published var accessory = Accessory.none { didSet { save(accessory.rawValue, "accessory") } }
     @Published var showAntenna = true { didSet { save(showAntenna, "showAntenna") } }
     @Published var showCheeks = true { didSet { save(showCheeks, "showCheeks") } }
+    @Published var aiSkin = false { didSet { save(aiSkin, "aiSkin") } }
+    @Published var digitalEyes = false { didSet { save(digitalEyes, "digitalEyes") } }
     @Published var pupilScale = 1.0 { didSet { save(pupilScale, "pupilScale") } }
     @Published var roundness = 36.0 { didSet { save(roundness, "roundness") } }
 
@@ -149,6 +155,8 @@ final class BuddySettings: ObservableObject {
         accessory = Accessory(rawValue: v("accessory", "none")) ?? .none
         showAntenna = v("showAntenna", true)
         showCheeks = v("showCheeks", true)
+        aiSkin = v("aiSkin", false)
+        digitalEyes = v("digitalEyes", false)
         pupilScale = v("pupilScale", 1.0)
         roundness = v("roundness", 36.0)
         followCursor = v("followCursor", false)
@@ -194,8 +202,9 @@ final class BuddySettings: ObservableObject {
     }
 
     func style(look: CGSize?) -> BuddyStyle {
-        BuddyStyle(body: body, limb: limb, accessory: accessory, antenna: showAntenna,
+        BuddyStyle(body: aiSkin ? RGB(hex: "7B6CF6")! : body, limb: aiSkin ? RGB(hex: "5A4BD1")! : limb,
+                   accessory: accessory, antenna: showAntenna,
                    cheeks: showCheeks, pupilScale: pupilScale, roundness: roundness,
-                   look: followCursor ? look : nil)
+                   look: followCursor ? look : nil, holo: aiSkin, digitalEyes: digitalEyes)
     }
 }

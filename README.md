@@ -28,6 +28,7 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 
 - 🎙️ **Talk to your buddy, powered by Gemini.** Double-click it or press <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>B</kbd> and just speak. Simple things happen instantly (*"open Safari"*, *"play Atif Aslam"*, *"volume up"*, *"set a timer for 5 minutes"*). Everything else goes to **Gemini** using your Google account (Google AI Pro), which answers out loud and can do things on your Mac: *"make a note called shopping with milk and eggs"*, *"remind me tomorrow at 9 to call Ali"*, *"turn on dark mode"*, *"make a folder on my Desktop called Projects"*. Follow-up questions remember the conversation.
 
+- ✨ **Modern AI look.** While you talk to it, a colorful glowing aura pulses with your voice and a live voice wave moves in a frosted-glass bubble. While Gemini thinks, the aura swirls and glowing particles orbit its head. When it answers, its mouth moves with each word and the answer types out in the bubble as it speaks. Optional in **Settings → Appearance → Look**: an **AI look** (shimmering purple-blue body with a glowing orb antenna) and **digital eyes** (glowing LED eyes on a dark screen).
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent as well as Claude Code.
 - 🔵 **Cursor looks different.** While Cursor's agent works, or whenever Cursor is the app you're using, the buddy turns blue, puts on headphones and shows a `</>` symbol on its laptop. With Claude it keeps its usual orange look.
 - 🎵 **Reacts to your music.** Play something in Music, Spotify, or on YouTube in Safari, Chrome, Brave or Edge and the buddy reads the title: it **dances** to party and wedding songs, **gets sad** (with a little tear) at sad songs, **blushes with floating hearts** for romantic songs, **nods along** to everything else, and for **Quran recitation** it goes still, closes its eyes and listens quietly. It only reads titles and never records audio. Turn it off from the right-click menu (**React to Music, Sports & Work**).
@@ -214,6 +215,7 @@ Sources/
   VoiceBuddy.swift      Listen → do it → answer out loud
   Speech.swift          Text-to-speech
   HotKey.swift          The global Control-Option-B shortcut
+  AIEffects.swift       Aura, thinking particles, live voice wave and mic level
 cursor/mac-buddy-cursor.py  Connects Cursor's agent to the buddy (adds hooks to ~/.cursor/hooks.json)
 scripts/make-release.sh   Builds MacBuddy.dmg + MacBuddy.zip for a GitHub release
 scripts/get.sh            The one-line installer

@@ -26,6 +26,8 @@ struct BubbleInfo: Equatable {
     var icon: String?
     var tint: Color = .primary
     var spinner = false
+    /// Show the live voice wave (while listening).
+    var wave = false
 }
 
 struct BubbleShape: Shape {
@@ -78,6 +80,7 @@ struct BubbleView: View {
     var body: some View {
         HStack(spacing: 6) {
             if info.spinner { TypingDots(t: t, color: accent) }
+            if info.wave { VoiceWave(t: t, level: AudioLevel.shared.value) }
             if let icon = info.icon {
                 Image(systemName: icon).foregroundStyle(info.tint)
             }
@@ -91,9 +94,16 @@ struct BubbleView: View {
         .padding(.top, 7)
         .padding(.bottom, 13)
         .background(
-            BubbleShape()
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.22), radius: 4, y: 2)
+            // Frosted glass: a blur of what's behind, a bright tint so text stays readable, and a light rim.
+            ZStack {
+                BubbleShape().fill(.ultraThinMaterial)
+                BubbleShape().fill(LinearGradient(colors: [Color.white.opacity(0.88), Color.white.opacity(0.66)],
+                                                  startPoint: .top, endPoint: .bottom))
+                BubbleShape().stroke(LinearGradient(colors: [Color.white, Color.white.opacity(0.25)],
+                                                    startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            }
+            .environment(\.colorScheme, .light)
+            .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         )
         .frame(maxWidth: BuddyLayout.window.width - 12)
     }
@@ -140,6 +150,12 @@ struct CharacterView: View {
     var vibe: Vibe? = nil
     /// Do just this one work activity (e.g. reading the news) instead of the usual routine.
     var fixedActivity: WorkActivity? = nil
+    /// Voice-assistant look: aura, particles and lip-sync.
+    var voiceLook: VoiceLook = .none
+    /// Microphone loudness 0…1 while listening.
+    var voiceLevel: Double = 0
+    /// How wide the mouth is open while speaking, 0…1.
+    var talk: Double = 0
 
     private var limb: Color { style.limb.color }
 
@@ -224,6 +240,19 @@ struct CharacterView: View {
 
         if mood == .idle, let vibe { applyVibe(vibe, to: &p) }
 
+        if voiceLook == .listening {
+            // Attentive: eyes on you, a little bigger when you speak louder, gentle tilt.
+            p.look = .zero
+            p.eyeScale = 1.06 + 0.12 * voiceLevel
+            p.tilt = sin(t * 1.4) * 3
+            p.mouth = .smile
+            p.antenna = AIPalette.glow
+            p.antennaGlow = 0.5 + 0.5 * voiceLevel
+        } else if voiceLook == .speaking {
+            p.antenna = AIPalette.glow
+            p.antennaGlow = 0.4 + 0.6 * talk
+        }
+
         if let look = style.look, vibe != .quran { p.look = look }
 
         if let reaction {
@@ -295,14 +324,20 @@ struct CharacterView: View {
             foot.offset(x: -20, y: 41 - p.leftFoot)
             foot.offset(x: 20, y: 41 - p.rightFoot)
 
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(LinearGradient(colors: [style.bodyLight, style.body.color],
-                                     startPoint: .top, endPoint: .bottom))
-                .frame(width: 92, height: 82)
-                .overlay(
+            Group {
+                if style.holo {
+                    holoBody(radius: radius)
+                } else {
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .stroke(limb.opacity(0.35), lineWidth: 1.5)
-                )
+                        .fill(LinearGradient(colors: [style.bodyLight, style.body.color],
+                                             startPoint: .top, endPoint: .bottom))
+                }
+            }
+            .frame(width: 92, height: 82)
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(style.holo ? Color.white.opacity(0.45) : limb.opacity(0.35), lineWidth: 1.5)
+            )
 
             face(p)
 
@@ -315,14 +350,45 @@ struct CharacterView: View {
         }
     }
 
+    /// The optional "AI look": a slowly turning purple-blue gradient with a glossy top and a
+    /// shine that sweeps across every few seconds.
+    private func holoBody(radius: Double) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let sweep = (t * 0.45).truncatingRemainder(dividingBy: 1.6)   // 0…1 sweeping, then a pause
+        return shape
+            .fill(AngularGradient(colors: [Color(red: 0.5, green: 0.38, blue: 1.0), Color(red: 0.3, green: 0.55, blue: 1.0),
+                                           Color(red: 0.4, green: 0.8, blue: 1.0), Color(red: 0.75, green: 0.45, blue: 1.0),
+                                           Color(red: 0.5, green: 0.38, blue: 1.0)],
+                                  center: .center, angle: .degrees(t * 30)))
+            .overlay(shape.fill(LinearGradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0)],
+                                               startPoint: .top, endPoint: .center)))
+            .overlay(
+                LinearGradient(colors: [.clear, Color.white.opacity(0.4), .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 26, height: 140)
+                    .rotationEffect(.degrees(18))
+                    .offset(x: -80 + sweep * 160)
+            )
+            .clipShape(shape)
+    }
+
     private func antenna(_ p: Pose) -> some View {
         let bulb = p.antenna ?? limb
         return ZStack(alignment: .top) {
             Capsule().fill(limb).frame(width: 3, height: 16).offset(y: 6)
-            Circle()
-                .fill(bulb)
-                .frame(width: 9, height: 9)
-                .shadow(color: bulb.opacity(p.antennaGlow), radius: 6)
+            if style.holo {
+                // A glowing orb.
+                Circle()
+                    .fill(RadialGradient(colors: [Color.white, p.antenna ?? AIPalette.glow], center: .center,
+                                         startRadius: 0, endRadius: 6))
+                    .frame(width: 11, height: 11)
+                    .shadow(color: (p.antenna ?? AIPalette.glow).opacity(0.5 + 0.5 * max(p.antennaGlow, 0.4)), radius: 7)
+                    .offset(y: -1)
+            } else {
+                Circle()
+                    .fill(bulb)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: bulb.opacity(p.antennaGlow), radius: 6)
+            }
         }
         .frame(width: 10, height: 24, alignment: .top)
         .rotationEffect(.degrees(sin(t * 3) * 10), anchor: .bottom)
@@ -331,15 +397,37 @@ struct CharacterView: View {
 
     private func face(_ p: Pose) -> some View {
         ZStack {
-            eye(p).offset(x: -17, y: -6)
-            eye(p).offset(x: 17, y: -6)
+            if style.digitalEyes {
+                // A dark screen the glowing eyes sit on.
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(white: 0.16), Color(white: 0.05)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 66, height: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    .offset(y: -6)
+                digitalEye(p).offset(x: -15, y: -6)
+                digitalEye(p).offset(x: 15, y: -6)
+            } else {
+                eye(p).offset(x: -17, y: -6)
+                eye(p).offset(x: 17, y: -6)
+            }
             if style.cheeks {
                 Ellipse().fill(Palette.cheek.opacity(0.45 + 0.45 * p.blush))
                     .frame(width: 12 + 5 * p.blush, height: 7 + 3 * p.blush).offset(x: -30, y: 9)
                 Ellipse().fill(Palette.cheek.opacity(0.45 + 0.45 * p.blush))
                     .frame(width: 12 + 5 * p.blush, height: 7 + 3 * p.blush).offset(x: 30, y: 9)
             }
-            mouth(p.mouth).offset(y: 15)
+            if talk > 0 {
+                // Talking: an open mouth that grows and shrinks with each word.
+                ZStack(alignment: .bottom) {
+                    Ellipse().fill(Palette.ink)
+                    Ellipse().fill(Palette.cheek).frame(width: 7, height: 3 + 2 * talk).offset(y: -1)
+                }
+                .frame(width: 10 + 4 * talk, height: 3 + 9 * talk)
+                .offset(y: 15)
+            } else {
+                mouth(p.mouth).offset(y: 15)
+            }
             if style.accessory == .glasses {
                 Circle().stroke(Palette.ink, lineWidth: 2.5).frame(width: 25, height: 25).offset(x: -17, y: -6)
                 Circle().stroke(Palette.ink, lineWidth: 2.5).frame(width: 25, height: 25).offset(x: 17, y: -6)
@@ -358,6 +446,43 @@ struct CharacterView: View {
             .frame(width: 13, height: 28)
             .offset(y: 11)
             .rotationEffect(.degrees(angle))
+    }
+
+    /// LED-style glowing eyes (optional "Digital eyes" look).
+    @ViewBuilder
+    private func digitalEye(_ p: Pose) -> some View {
+        let glow = AIPalette.glow
+        switch p.eyes {
+        case .open(let openness):
+            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                .fill(glow)
+                .frame(width: 11, height: max(2, 16 * openness * p.eyeScale))
+                .overlay(   // scanlines
+                    VStack(spacing: 2) {
+                        ForEach(0..<5, id: \.self) { _ in Rectangle().fill(Color.black.opacity(0.18)).frame(height: 1) }
+                    }
+                    .frame(width: 11, height: 14)
+                    .clipped()
+                )
+                .shadow(color: glow, radius: 4)
+                .offset(x: p.look.width * 0.7, y: p.look.height * 0.5)
+        case .happy:
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 7))
+                path.addQuadCurve(to: CGPoint(x: 14, y: 7), control: CGPoint(x: 7, y: -3))
+            }
+            .stroke(glow, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            .frame(width: 14, height: 9)
+            .shadow(color: glow, radius: 4)
+        case .closed:
+            Capsule().fill(glow).frame(width: 13, height: 2.5).shadow(color: glow, radius: 3)
+        case .dizzy:
+            Text("@")
+                .font(.system(size: 16, weight: .heavy, design: .monospaced))
+                .foregroundStyle(glow)
+                .shadow(color: glow, radius: 3)
+                .rotationEffect(.degrees(t * 400))
+        }
     }
 
     @ViewBuilder
@@ -533,6 +658,7 @@ struct CharacterView: View {
 
     @ViewBuilder
     private var effectsBehind: some View {
+        aura(voiceLook, level: voiceLevel)
         if mood == .idle, vibe == .quran {
             // A soft, slow glow while listening.
             Circle()
@@ -556,6 +682,7 @@ struct CharacterView: View {
 
     @ViewBuilder
     private var effectsInFront: some View {
+        thinkingParticles(voiceLook)
         if let work { workEffects(work) }
         if let work, work.activity == .typing {
             let glyphs = ["{ }", "</>", "01", "fn", "=>"]
@@ -683,6 +810,9 @@ struct BuddyStack: View {
     var screenAgent: Agent? = nil
     var vibe: Vibe? = nil
     var fixedActivity: WorkActivity? = nil
+    var voiceLook: VoiceLook = .none
+    var voiceLevel: Double = 0
+    var talk: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -696,7 +826,8 @@ struct BuddyStack: View {
             .animation(.spring(duration: 0.3, bounce: 0.4), value: bubble)
 
             CharacterView(mood: mood, t: t, reaction: reaction, style: style, agentTint: agentTint,
-                          screenAgent: screenAgent, vibe: vibe, fixedActivity: fixedActivity)
+                          screenAgent: screenAgent, vibe: vibe, fixedActivity: fixedActivity,
+                          voiceLook: voiceLook, voiceLevel: voiceLevel, talk: talk)
         }
         .frame(width: BuddyLayout.window.width, height: BuddyLayout.window.height, alignment: .bottom)
     }
@@ -734,18 +865,29 @@ struct BuddyView: View {
     @ObservedObject var model: BuddyModel
     @ObservedObject var settings: BuddySettings
 
-    static func voiceBubble(_ voice: VoiceState) -> BubbleInfo? {
+    static func voiceLook(_ voice: VoiceState, speaking: Bool) -> VoiceLook {
+        switch voice {
+        case .off: return .none
+        case .listening(_): return .listening
+        case .thinking: return .thinking
+        case .answering(_): return speaking ? .speaking : .none
+        }
+    }
+
+    static func voiceBubble(_ voice: VoiceState, speaker: Speaker) -> BubbleInfo? {
         switch voice {
         case .off:
             return nil
         case .listening(let heard):
-            let text = heard.isEmpty ? "Listening…" : "…" + String(heard.suffix(30))
-            return BubbleInfo(text: text, icon: "mic.fill", tint: .red)
+            let text = heard.isEmpty ? "Listening…" : "…" + String(heard.suffix(26))
+            return BubbleInfo(text: text, wave: true)
         case .thinking:
-            return BubbleInfo(text: "Thinking…", icon: "sparkles", tint: Agent.gemini, spinner: true)
+            return BubbleInfo(text: "Thinking…", icon: "sparkles", tint: Agent.gemini)
         case .answering(let answer):
-            let text = answer.count > 40 ? String(answer.prefix(38)) + "…" : answer
-            return BubbleInfo(text: text, icon: "bubble.left.fill", tint: Agent.gemini)
+            // Types along with the voice, word by word.
+            let typed = speaker.typedSoFar(limit: 36)
+            let text = typed.isEmpty ? (answer.count > 38 ? String(answer.prefix(36)) + "…" : answer) : typed
+            return BubbleInfo(text: text, icon: "sparkles", tint: Agent.gemini)
         }
     }
 
@@ -805,6 +947,7 @@ struct BuddyView: View {
         var s = style
         s.body = Agent.cursorBody
         s.limb = Agent.cursorLimb
+        s.holo = false   // Cursor's blue wins over the AI look
         if s.accessory == .none { s.accessory = .headphones }
         return s
     }
@@ -813,7 +956,7 @@ struct BuddyView: View {
         TimelineView(.animation(minimumInterval: 1.0 / 40)) { timeline in
             let now = timeline.date
             let t = now.timeIntervalSinceReferenceDate * settings.animationSpeed
-            let bubble = Self.voiceBubble(model.voice)
+            let bubble = Self.voiceBubble(model.voice, speaker: Speaker.shared)
                 ?? model.activePhrase(at: now).map { BubbleInfo(text: $0) }
                 ?? BuddyStack.bubble(for: model.mood, projects: model.projects, settings: settings,
                                      agents: model.agents, doneAgent: model.doneAgent)
@@ -830,11 +973,15 @@ struct BuddyView: View {
             let mood: Mood = chatting ? (model.voice == .thinking ? .working : .idle)
                 : (activity != nil ? .working : model.mood)
             let fixed: WorkActivity? = chatting ? (model.voice == .thinking ? .thinking : nil) : (activity ?? nil)
+            let look = Self.voiceLook(model.voice, speaking: Speaker.shared.isSpeaking)
             BuddyStack(bubble: bubble, mood: mood, t: t, reaction: model.reaction(at: now),
                        style: Self.themed(settings.style(look: model.cursorLook), for: chatting ? nil : model.themeAgent),
                        agentTint: chatting ? Optional(Agent.gemini) : tint, screenAgent: chatting ? nil : model.themeAgent,
                        vibe: chatting || activity != nil ? nil : model.vibe,
-                       fixedActivity: fixed)
+                       fixedActivity: fixed,
+                       voiceLook: look,
+                       voiceLevel: look == .listening ? AudioLevel.shared.value : 0,
+                       talk: look == .speaking ? Speaker.shared.mouthOpenness(at: now) : 0)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,

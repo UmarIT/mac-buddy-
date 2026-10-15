@@ -124,6 +124,7 @@ final class Listener {
 
     private func teardown() {
         isListening = false
+        AudioLevel.shared.reset()
         silenceTimer?.invalidate(); silenceTimer = nil
         limitTimer?.invalidate(); limitTimer = nil
         if engine.isRunning { engine.stop() }
@@ -144,7 +145,16 @@ final class Listener {
     }
 
     nonisolated private static func tapBlock(for request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
-        { buffer, _ in request.append(buffer) }
+        { buffer, _ in
+            request.append(buffer)
+            // Loudness for the live voice wave in the bubble.
+            guard let samples = buffer.floatChannelData?[0] else { return }
+            let n = Int(buffer.frameLength)
+            guard n > 0 else { return }
+            var sum: Float = 0
+            for i in 0..<n { sum += samples[i] * samples[i] }
+            AudioLevel.shared.push((sum / Float(n)).squareRoot())
+        }
     }
 
     nonisolated private static func resultHandler(for owner: Listener) -> (SFSpeechRecognitionResult?, Error?) -> Void {

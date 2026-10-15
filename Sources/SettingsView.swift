@@ -159,6 +159,8 @@ private struct AppearanceTab: View {
                 SliderRow(title: "Pupil size", value: $settings.pupilScale, range: 0.6...1.5, format: percent)
                 Toggle("Antenna", isOn: $settings.showAntenna)
                 Toggle("Rosy cheeks", isOn: $settings.showCheeks)
+                Toggle("AI look (shimmering gradient body, glowing orb)", isOn: $settings.aiSkin)
+                Toggle("Digital eyes (glowing LED screen)", isOn: $settings.digitalEyes)
             }
         }
         .formStyle(.grouped)

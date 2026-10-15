@@ -28,6 +28,7 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 
 - 🎙️ **Talk to your buddy, powered by Gemini.** Double-click it or press <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>B</kbd> and just speak. Simple things happen instantly (*"open Safari"*, *"play Atif Aslam"*, *"volume up"*, *"set a timer for 5 minutes"*). Everything else goes to **Gemini** using your Google account (Google AI Pro), which answers out loud and can do things on your Mac: *"make a note called shopping with milk and eggs"*, *"remind me tomorrow at 9 to call Ali"*, *"turn on dark mode"*, *"make a folder on my Desktop called Projects"*. Follow-up questions remember the conversation.
 
+- 🤝 **A personal companion that talks first.** The buddy greets you by name, chats about what you're doing (*"Ooh, cricket! Who do you think will win, Umar?"*, *"That's a sad one. Everything okay?"*), reminds you to stretch after an hour of work, and tells you to sleep when it's very late. Gemini writes each line fresh. When it asks you something, it listens for your answer, and every answer keeps the conversation going until you stop replying or say "thanks" or "bye". It stays silent during Quran recitation and calls. Set how chatty it is in **Settings → Behavior → Personal companion**.
 - ✨ **Modern AI look.** While you talk to it, a colorful glowing aura pulses with your voice and a live voice wave moves in a frosted-glass bubble. While Gemini thinks, the aura swirls and glowing particles orbit its head. When it answers, its mouth moves with each word and the answer types out in the bubble as it speaks. Optional in **Settings → Appearance → Look**: an **AI look** (shimmering purple-blue body with a glowing orb antenna) and **digital eyes** (glowing LED eyes on a dark screen).
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent as well as Claude Code.
 - 🔵 **Cursor looks different.** While Cursor's agent works, or whenever Cursor is the app you're using, the buddy turns blue, puts on headphones and shows a `</>` symbol on its laptop. With Claude it keeps its usual orange look.
@@ -212,7 +213,8 @@ Sources/
   Listener.swift        Microphone + speech-to-text (on-device when supported)
   Commands.swift        Instant built-in commands (open apps/sites, play songs, volume, timers…)
   Gemini.swift          Sends everything else to Gemini via the Antigravity CLI (agy -p)
-  VoiceBuddy.swift      Listen → do it → answer out loud
+  VoiceBuddy.swift      Listen → do it → answer out loud → listen for your reply
+  Companion.swift       Talks by itself: greetings, comments, break and bedtime reminders
   Speech.swift          Text-to-speech
   HotKey.swift          The global Control-Option-B shortcut
   AIEffects.swift       Aura, thinking particles, live voice wave and mic level

@@ -11,7 +11,11 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var text = ""
     private(set) var spokenUpTo = 0
     private(set) var isSpeaking = false
+    /// Called when a line has been spoken all the way through (not when it's cut off).
+    var onDone: (() -> Void)?
     private var wordStarted = Date.distantPast
+    /// The utterance being spoken now, so callbacks about an older one are ignored.
+    private var currentID: ObjectIdentifier?
 
     override init() {
         super.init()
@@ -28,6 +32,7 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
         wordStarted = Date()
         let utterance = AVSpeechUtterance(string: clean)
         utterance.pitchMultiplier = 1.2   // a little higher, to suit a small buddy
+        currentID = ObjectIdentifier(utterance)
         synth.speak(utterance)
     }
 
@@ -60,8 +65,10 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
                                        willSpeakRangeOfSpeechString characterRange: NSRange,
                                        utterance: AVSpeechUtterance) {
         let end = characterRange.location + characterRange.length
+        let id = ObjectIdentifier(utterance)
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
+                guard self.currentID == id else { return }
                 self.spokenUpTo = max(self.spokenUpTo, end)
                 self.wordStarted = Date()
             }
@@ -69,19 +76,23 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        let id = ObjectIdentifier(utterance)
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
+                guard self.currentID == id else { return }
                 self.isSpeaking = false
                 self.spokenUpTo = (self.text as NSString).length
+                self.onDone?()
             }
         }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        let id = ObjectIdentifier(utterance)
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 // Only if nothing new started speaking in the meantime.
-                if !self.synth.isSpeaking { self.isSpeaking = false }
+                if self.currentID == id { self.isSpeaking = false }
             }
         }
     }

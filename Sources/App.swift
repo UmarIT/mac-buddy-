@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let settings = BuddySettings()
     private lazy var model = BuddyModel(settings: settings)
     private lazy var voice = VoiceBuddy(model: model, settings: settings)
+    private lazy var companion = Companion(model: model, settings: settings, voice: voice)
     private var hotKey: HotKey?
     private var panel: NSPanel!
     private var settingsWindow: NSWindow?
@@ -106,9 +107,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 MainActor.assumeIsolated { self?.tick() }
             },
             Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.model.checkMusic() }
+                MainActor.assumeIsolated {
+                    self?.model.checkMusic()
+                    self?.companion.tick()
+                }
             },
         ]
+        // Say hello once everything is up.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            MainActor.assumeIsolated { self?.companion.greet() }
+        }
 
         if ClaudeHooks.isConnected {
             try? ClaudeHooks.writeShim()   // keeps hooks working if the app was moved

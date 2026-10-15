@@ -31,6 +31,16 @@ final class GeminiBrain {
         current = nil
     }
 
+    /// A one-off line for the buddy to say on its own (not part of the chat). nil if Gemini isn't
+    /// available or fails, so the caller can use a built-in line instead.
+    func remark(_ prompt: String, completion: @escaping @MainActor (String?) -> Void) {
+        let job = GeminiJob(request: prompt, conversation: nil, canAct: false, raw: true)
+        Task.detached {
+            let reply = job.run()
+            await MainActor.run { completion(reply.ok ? reply.text : nil) }
+        }
+    }
+
     /// Forget the conversation so the next request starts fresh.
     func reset() { conversationID = nil }
 }
@@ -38,10 +48,16 @@ final class GeminiBrain {
 // MARK: - One request (runs off the main thread)
 
 final class GeminiJob: @unchecked Sendable {
-    struct Reply { let text: String; let conversation: String? }
+    struct Reply {
+        let text: String
+        let conversation: String?
+        var ok = false
+    }
 
     static let persona = """
-    You are Mac Buddy, a cheerful little assistant living on the user's Mac. The user is talking to \
+    You are Mac Buddy, a cheerful little companion living on the user's Mac, and their close friend. \
+    Their name is \(NSFullUserName().split(separator: " ").first.map(String.init) ?? "friend"). Talk warmly \
+    and casually, like a friend who cares about them, and use their name now and then. The user is talking to \
     you by voice: their words come from speech recognition and may contain small mistakes, so work \
     out what they most likely meant. Your reply is read aloud by a text-to-speech voice, so answer \
     in plain spoken language in at most three short sentences, with no markdown, lists, emoji, \
@@ -63,14 +79,17 @@ final class GeminiJob: @unchecked Sendable {
     private let request: String
     private let conversation: String?
     private let canAct: Bool
+    /// Send the request exactly as given: no persona, no conversation, never acts.
+    private let raw: Bool
     private let lock = NSLock()
     private var process: Process?
     private var cancelled = false
 
-    init(request: String, conversation: String?, canAct: Bool) {
+    init(request: String, conversation: String?, canAct: Bool, raw: Bool = false) {
         self.request = request
         self.conversation = conversation
-        self.canAct = canAct
+        self.canAct = canAct && !raw
+        self.raw = raw
     }
 
     func cancel() {
@@ -99,7 +118,8 @@ final class GeminiJob: @unchecked Sendable {
 
     private func attempt(_ agy: AgyLocator.Found, conversation: String?) -> (reply: Reply, retryFresh: Bool) {
         // The persona goes with the first message of a conversation; follow-ups just send the request.
-        let prompt = conversation == nil
+        let prompt = raw ? request
+            : conversation == nil
             ? "\(Self.persona)\n\nThe user said: \(request)"
             : "The user said: \(request)"
         var args = ["-p", prompt, "--output-format", "json"]
@@ -133,7 +153,7 @@ final class GeminiJob: @unchecked Sendable {
         lock.unlock()
 
         // Don't let a stuck request hang the buddy forever.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 180) { [weak p] in
+        DispatchQueue.global().asyncAfter(deadline: .now() + (raw ? 40 : 180)) { [weak p] in
             if let p, p.isRunning { p.terminate() }
         }
 
@@ -146,7 +166,7 @@ final class GeminiJob: @unchecked Sendable {
         let id = json?["conversation_id"] as? String
         let status = (json?["status"] as? String)?.uppercased()
         if let text = json?["response"] as? String, !text.isEmpty, status == nil || status == "SUCCESS" {
-            return (Reply(text: text.trimmingCharacters(in: .whitespacesAndNewlines), conversation: id), false)
+            return (Reply(text: text.trimmingCharacters(in: .whitespacesAndNewlines), conversation: id, ok: true), false)
         }
 
         let err = ((try? String(contentsOf: errURL, encoding: .utf8)) ?? "") + " "

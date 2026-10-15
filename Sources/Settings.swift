@@ -133,6 +133,12 @@ final class BuddySettings: ObservableObject {
     @Published var voiceAssistant = true { didSet { save(voiceAssistant, "voiceAssistant") } }
     @Published var geminiActs = true { didSet { save(geminiActs, "geminiActs") } }
     @Published var instantCommands = true { didSet { save(instantCommands, "instantCommands") } }
+    /// 0 off, 1 quiet, 2 normal, 3 chatty: how often the buddy talks by itself.
+    @Published var chattiness = 2 { didSet { save(chattiness, "chattiness") } }
+    /// After the buddy speaks, listen for your reply by itself.
+    @Published var keepConversation = true { didSet { save(keepConversation, "keepConversation") } }
+    /// Let Gemini write what the buddy says by itself (otherwise built-in lines).
+    @Published var geminiRemarks = true { didSet { save(geminiRemarks, "geminiRemarks") } }
 
     // Claude Code
     @Published var showBubble = true { didSet { save(showBubble, "showBubble") } }
@@ -171,6 +177,9 @@ final class BuddySettings: ObservableObject {
         voiceAssistant = v("voiceAssistant", true)
         geminiActs = v("geminiActs", true)
         instantCommands = v("instantCommands", true)
+        chattiness = v("chattiness", 2)
+        keepConversation = v("keepConversation", true)
+        geminiRemarks = v("geminiRemarks", true)
         showBubble = v("showBubble", true)
         showProject = v("showProject", true)
         celebrate = v("celebrate", true)

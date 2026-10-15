@@ -38,9 +38,16 @@ final class Listener {
     /// The last error from speech recognition, e.g. "kAFAssistantErrorDomain 1101: …".
     private var lastError: String?
 
-    /// Asks for permission the first time, then starts listening.
-    func start() {
+    /// True when listening for a reply on its own: silence then just ends quietly.
+    private var quiet = false
+    private var firstWait: TimeInterval = 7
+
+    /// Asks for permission the first time, then starts listening. `quiet`: if nothing is said,
+    /// finish silently (used when the buddy listens for your reply by itself).
+    func start(quiet: Bool = false, firstWait: TimeInterval = 7) {
         guard !isListening else { return }
+        self.quiet = quiet
+        self.firstWait = firstWait
         isListening = true
         transcript = ""
         lastError = nil
@@ -116,7 +123,7 @@ final class Listener {
         task = recognizer.recognitionTask(with: request, resultHandler: Self.resultHandler(for: self))
 
         // Give up if nothing is said, and never listen for too long.
-        restartSilenceTimer(after: 7)
+        restartSilenceTimer(after: firstWait)
         limitTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.stop() }
         }
@@ -146,7 +153,7 @@ final class Listener {
         let error = lastError
         voiceLog("finish: heard=\"\(heard)\" peak=\(String(format: "%.2f", peak)) error=\(error ?? "none")")
         teardown()
-        guard heard.isEmpty else {
+        guard heard.isEmpty, !quiet else {
             onFinish?(heard)
             return
         }

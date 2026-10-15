@@ -238,6 +238,23 @@ private struct BehaviorTab: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section {
+                Picker("Talks by itself", selection: $settings.chattiness) {
+                    Text("Never").tag(0)
+                    Text("Now and then").tag(1)
+                    Text("Normal").tag(2)
+                    Text("Chatty").tag(3)
+                }
+                Toggle("Keep the conversation going (listens for your reply)", isOn: $settings.keepConversation)
+                Toggle("Let Gemini write what it says (more personal)", isOn: $settings.geminiRemarks)
+                    .disabled(settings.chattiness == 0)
+            } header: {
+                Text("Personal companion")
+            } footer: {
+                Text("Buddy greets you, chats about what you're watching or doing, reminds you to take breaks and to sleep when it's late. It stays quiet during Quran recitation and calls. When it asks you something, it listens for your answer; if you don't reply, it stops listening.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Sleep") {
                 Toggle("Fall asleep when nothing is happening", isOn: $settings.sleepEnabled)
                 Stepper("After \(Int(settings.sleepMinutes)) min", value: $settings.sleepMinutes, in: 1...120)

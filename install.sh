@@ -27,3 +27,9 @@ fi
 
 open "$DEST"
 echo "Mac Buddy is running. Right-click it for options, or open it again for Settings."
+if ! command -v agy >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/agy" ]; then
+  echo
+  echo "To talk to your buddy (Gemini), install the Antigravity CLI and sign in once:"
+  echo "  curl -fsSL https://antigravity.google/cli/install.sh | bash"
+  echo "  agy"
+fi

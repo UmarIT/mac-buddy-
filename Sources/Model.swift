@@ -28,6 +28,9 @@ enum Agent: Equatable {
     /// A generic SF Symbol shown in the bubble (not a brand logo).
     var icon: String { self == .cursor ? "cursorarrow.rays" : "sparkle" }
 
+    /// Color for the voice assistant (Gemini).
+    static let gemini = Color(red: 0.45, green: 0.45, blue: 1.0)
+
     /// Whole-body colors for Cursor (Claude keeps your own colors).
     static let cursorBody = RGB(hex: "4A8FE7")!
     static let cursorLimb = RGB(hex: "2F67B8")!
@@ -78,6 +81,8 @@ final class BuddyModel: ObservableObject {
     /// What's playing right now (song or video title), and how the buddy feels about it.
     @Published private(set) var nowPlaying: String?
     @Published private(set) var vibe: Vibe?
+    /// Voice conversation with you (listening / thinking / answering).
+    @Published private(set) var voice: VoiceState = .off
     private var checkingMusic = false
 
     /// Pupil offset toward the cursor, updated by the app delegate.
@@ -211,6 +216,12 @@ final class BuddyModel: ObservableObject {
     }
 
     /// Called when the buddy is clicked.
+    func setVoice(_ state: VoiceState) {
+        if voice != state { voice = state }
+        lastActivity = Date()   // a chat keeps the buddy awake
+        if mood == .sleeping { mood = .idle }
+    }
+
     func poke() {
         let now = Date()
         let wasSleeping = mood == .sleeping

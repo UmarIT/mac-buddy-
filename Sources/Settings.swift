@@ -124,6 +124,9 @@ final class BuddySettings: ObservableObject {
     @Published var alwaysOnTop = true { didSet { save(alwaysOnTop, "alwaysOnTop") } }
     @Published var allSpaces = true { didSet { save(allSpaces, "allSpaces") } }
     @Published var reactToMusic = true { didSet { save(reactToMusic, "reactToMusic") } }
+    @Published var voiceAssistant = true { didSet { save(voiceAssistant, "voiceAssistant") } }
+    @Published var geminiActs = true { didSet { save(geminiActs, "geminiActs") } }
+    @Published var instantCommands = true { didSet { save(instantCommands, "instantCommands") } }
 
     // Claude Code
     @Published var showBubble = true { didSet { save(showBubble, "showBubble") } }
@@ -157,6 +160,9 @@ final class BuddySettings: ObservableObject {
         alwaysOnTop = v("alwaysOnTop", true)
         allSpaces = v("allSpaces", true)
         reactToMusic = v("reactToMusic", true)
+        voiceAssistant = v("voiceAssistant", true)
+        geminiActs = v("geminiActs", true)
+        instantCommands = v("instantCommands", true)
         showBubble = v("showBubble", true)
         showProject = v("showProject", true)
         celebrate = v("celebrate", true)

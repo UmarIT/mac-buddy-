@@ -22,6 +22,10 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Mac Buddy listens when you double-click it or press Control-Option-B, so you can talk to it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Mac Buddy turns what you say into text so it can help you.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Mac Buddy reads the title of the song or video you're playing so it can react to it.</string>
 </dict>

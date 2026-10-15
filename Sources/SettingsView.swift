@@ -221,6 +221,21 @@ private struct BehaviorTab: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section {
+                Toggle("Talk to Buddy (double-click it or press \(HotKey.defaultLabel))", isOn: $settings.voiceAssistant)
+                Toggle("Let Gemini do things on my Mac", isOn: $settings.geminiActs)
+                    .disabled(!settings.voiceAssistant)
+                Toggle("Do simple commands instantly (open apps, play songs, volume, timers)", isOn: $settings.instantCommands)
+                    .disabled(!settings.voiceAssistant)
+            } header: {
+                Text("Voice assistant (Gemini)")
+            } footer: {
+                Text(settings.geminiActs
+                     ? "Buddy uses Gemini through the Antigravity CLI (agy), signed in with your Google account. Gemini can open apps, control Music, Notes, Reminders and more, and run commands without asking first. Speech can be misheard, so turn this off if you're unsure."
+                     : "Buddy uses Gemini through the Antigravity CLI (agy), signed in with your Google account. With doing things turned off, Gemini only answers.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Sleep") {
                 Toggle("Fall asleep when nothing is happening", isOn: $settings.sleepEnabled)
                 Stepper("After \(Int(settings.sleepMinutes)) min", value: $settings.sleepMinutes, in: 1...120)

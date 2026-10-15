@@ -734,6 +734,21 @@ struct BuddyView: View {
     @ObservedObject var model: BuddyModel
     @ObservedObject var settings: BuddySettings
 
+    static func voiceBubble(_ voice: VoiceState) -> BubbleInfo? {
+        switch voice {
+        case .off:
+            return nil
+        case .listening(let heard):
+            let text = heard.isEmpty ? "Listening…" : "…" + String(heard.suffix(30))
+            return BubbleInfo(text: text, icon: "mic.fill", tint: .red)
+        case .thinking:
+            return BubbleInfo(text: "Thinking…", icon: "sparkles", tint: Agent.gemini, spinner: true)
+        case .answering(let answer):
+            let text = answer.count > 40 ? String(answer.prefix(38)) + "…" : answer
+            return BubbleInfo(text: text, icon: "bubble.left.fill", tint: Agent.gemini)
+        }
+    }
+
     /// nil: not a working reaction. .some(nil): the usual work routine. .some(x): just activity x.
     static func activity(for vibe: Vibe?) -> WorkActivity?? {
         switch vibe {
@@ -798,7 +813,8 @@ struct BuddyView: View {
         TimelineView(.animation(minimumInterval: 1.0 / 40)) { timeline in
             let now = timeline.date
             let t = now.timeIntervalSinceReferenceDate * settings.animationSpeed
-            let bubble = model.activePhrase(at: now).map { BubbleInfo(text: $0) }
+            let bubble = Self.voiceBubble(model.voice)
+                ?? model.activePhrase(at: now).map { BubbleInfo(text: $0) }
                 ?? BuddyStack.bubble(for: model.mood, projects: model.projects, settings: settings,
                                      agents: model.agents, doneAgent: model.doneAgent)
                 ?? (model.mood == .idle && settings.showBubble ? Self.vibeBubble(model.vibe, title: model.nowPlaying) : nil)
@@ -808,11 +824,17 @@ struct BuddyView: View {
                 : agents[Int(now.timeIntervalSinceReferenceDate / 1.5) % agents.count].tint
             // A work tab or app in front: the buddy works along with you; news and
             // learning sites make it read, a search makes it think.
-            let activity = model.mood == .idle ? Self.activity(for: model.vibe) : nil
-            BuddyStack(bubble: bubble, mood: activity != nil ? .working : model.mood, t: t, reaction: model.reaction(at: now),
-                       style: Self.themed(settings.style(look: model.cursorLook), for: model.themeAgent),
-                       agentTint: tint, screenAgent: model.themeAgent, vibe: activity != nil ? nil : model.vibe,
-                       fixedActivity: activity ?? nil)
+            let chatting = model.voice.isActive
+            let activity = model.mood == .idle && !chatting ? Self.activity(for: model.vibe) : nil
+            // While you talk to it: calm while listening or answering, thinking hard while Gemini works.
+            let mood: Mood = chatting ? (model.voice == .thinking ? .working : .idle)
+                : (activity != nil ? .working : model.mood)
+            let fixed: WorkActivity? = chatting ? (model.voice == .thinking ? .thinking : nil) : (activity ?? nil)
+            BuddyStack(bubble: bubble, mood: mood, t: t, reaction: model.reaction(at: now),
+                       style: Self.themed(settings.style(look: model.cursorLook), for: chatting ? nil : model.themeAgent),
+                       agentTint: chatting ? Optional(Agent.gemini) : tint, screenAgent: chatting ? nil : model.themeAgent,
+                       vibe: chatting || activity != nil ? nil : model.vibe,
+                       fixedActivity: fixed)
                 .opacity(settings.opacity)
                 .scaleEffect(settings.scale)
                 .frame(width: BuddyLayout.window.width * settings.scale,

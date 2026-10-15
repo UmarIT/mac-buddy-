@@ -26,6 +26,8 @@ It types on its laptop while Claude is busy, waves when Claude needs your permis
 
 ## What's added in this version
 
+- 🎙️ **Talk to your buddy, powered by Gemini.** Double-click it or press <kbd>Control</kbd>+<kbd>Option</kbd>+<kbd>B</kbd> and just speak. Simple things happen instantly (*"open Safari"*, *"play Atif Aslam"*, *"volume up"*, *"set a timer for 5 minutes"*). Everything else goes to **Gemini** using your Google account (Google AI Pro), which answers out loud and can do things on your Mac: *"make a note called shopping with milk and eggs"*, *"remind me tomorrow at 9 to call Ali"*, *"turn on dark mode"*, *"make a folder on my Desktop called Projects"*. Follow-up questions remember the conversation.
+
 - 🖱️ **Cursor support.** The buddy reacts to Cursor's AI agent as well as Claude Code.
 - 🔵 **Cursor looks different.** While Cursor's agent works, or whenever Cursor is the app you're using, the buddy turns blue, puts on headphones and shows a `</>` symbol on its laptop. With Claude it keeps its usual orange look.
 - 🎵 **Reacts to your music.** Play something in Music, Spotify, or on YouTube in Safari, Chrome, Brave or Edge and the buddy reads the title: it **dances** to party and wedding songs, **gets sad** (with a little tear) at sad songs, **blushes with floating hearts** for romantic songs, **nods along** to everything else, and for **Quran recitation** it goes still, closes its eyes and listens quietly. It only reads titles and never records audio. Turn it off from the right-click menu (**React to Music, Sports & Work**).
@@ -78,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/mohsin2596/mac-buddy/main/scripts/g
 
 This downloads the latest release into `/Applications`, connects it to Claude Code and launches it. Files downloaded from Terminal aren't flagged by Gatekeeper, so there's no "Open Anyway" step. [Read the script](scripts/get.sh) first if you like.
 
-### Option 3: Build from source (includes Cursor support)
+### Option 3: Build from source (includes Cursor support and the voice assistant)
 
 Options 1 and 2 install the original release without Cursor support. To get this version, build from source. It needs the Xcode Command Line Tools (`xcode-select --install`).
 
@@ -89,6 +91,20 @@ cd mac-buddy-
 ```
 
 The installer also connects Cursor if it's installed. To connect Cursor later, run `python3 cursor/mac-buddy-cursor.py install` and restart Cursor.
+
+#### Set up the voice assistant (Gemini)
+
+The buddy's brain is Google's **Antigravity CLI** (`agy`), the successor to Gemini CLI, signed in with your Google account so it uses your Gemini plan.
+
+```bash
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+agy        # opens your browser once to sign in with Google, then type /exit
+```
+
+Then double-click the buddy and speak. The first time, click **Allow** for **Microphone** and **Speech Recognition** (and for any app Gemini controls, such as Notes or Reminders).
+
+> [!WARNING]
+> With **Let Gemini do things on my Mac** on (the default), Gemini runs commands without asking first. It's told never to delete files, send messages, post, buy anything or change security settings unless you clearly ask for exactly that, but speech can be misheard. Turn it off in **Settings → Behavior** if you only want answers.
 
 ### What "Connect" does
 
@@ -111,6 +127,7 @@ Right-click the buddy, choose **Disconnect from Claude Code**, then quit it and 
 | Action | What happens |
 | --- | --- |
 | **Click** the buddy | It reacts and says something |
+| **Double-click** the buddy, or press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>B</kbd> | Starts listening. Speak, then pause; it answers out loud. Press again while it's listening to send right away, or while it's thinking to cancel |
 | **Drag** the buddy | Moves it; the position is remembered |
 | **Right-click** the buddy | Say Hi, Eyes Follow Cursor, Settings…, Reset Position, Quit |
 | **Open the app again** (Spotlight / Finder) | Opens the Settings window |
@@ -191,6 +208,12 @@ Sources/
   SettingsView.swift    The Settings window
   ClaudeHooks.swift     Hook handling plus connecting/disconnecting Claude Code
   NowPlaying.swift      Reads what you're playing, watching or working on and picks a reaction
+  Listener.swift        Microphone + speech-to-text (on-device when supported)
+  Commands.swift        Instant built-in commands (open apps/sites, play songs, volume, timers…)
+  Gemini.swift          Sends everything else to Gemini via the Antigravity CLI (agy -p)
+  VoiceBuddy.swift      Listen → do it → answer out loud
+  Speech.swift          Text-to-speech
+  HotKey.swift          The global Control-Option-B shortcut
 cursor/mac-buddy-cursor.py  Connects Cursor's agent to the buddy (adds hooks to ~/.cursor/hooks.json)
 scripts/make-release.sh   Builds MacBuddy.dmg + MacBuddy.zip for a GitHub release
 scripts/get.sh            The one-line installer

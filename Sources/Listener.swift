@@ -2,6 +2,23 @@ import AppKit
 import AVFoundation
 import Speech
 
+/// Appends a line to ~/.mac-buddy/voice.log so listening problems can be diagnosed.
+func voiceLog(_ message: String) {
+    let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mac-buddy")
+    let url = dir.appendingPathComponent("voice.log")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let f = DateFormatter()
+    f.dateFormat = "HH:mm:ss"
+    let line = "\(f.string(from: Date())) \(message)\n"
+    if let handle = try? FileHandle(forWritingTo: url) {
+        handle.seekToEndOfFile()
+        handle.write(Data(line.utf8))
+        try? handle.close()
+    } else {
+        try? line.write(to: url, atomically: true, encoding: .utf8)
+    }
+}
+
 /// Listens to the microphone and turns speech into text. Stops by itself after a short pause.
 @MainActor
 final class Listener {
@@ -69,6 +86,7 @@ final class Listener {
             return
         }
         self.recognizer = recognizer
+        voiceLog("start: locale=\(recognizer.locale.identifier) available=\(recognizer.isAvailable) onDevice=\(recognizer.supportsOnDeviceRecognition) speechAuth=\(SFSpeechRecognizer.authorizationStatus().rawValue) micAuth=\(AVCaptureDevice.authorizationStatus(for: .audio).rawValue)")
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -82,6 +100,7 @@ final class Listener {
             fail("I couldn't find a microphone.")
             return
         }
+        voiceLog("mic format: \(format.sampleRate) Hz, \(format.channelCount) channel(s)")
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(for: request))
 
@@ -89,6 +108,7 @@ final class Listener {
         do {
             try engine.start()
         } catch {
+            voiceLog("engine start failed: \(error)")
             fail("I couldn't start the microphone.")
             return
         }
@@ -109,7 +129,7 @@ final class Listener {
             onPartial?(text)
             restartSilenceTimer(after: 1.6)   // a short pause means you're done talking
         }
-        if let error { lastError = error }
+        if let error { lastError = error; voiceLog("recognition error: \(error)") }
         if isFinal || error != nil { finish() }
     }
 
@@ -124,6 +144,7 @@ final class Listener {
         let heard = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         let peak = AudioLevel.shared.peak
         let error = lastError
+        voiceLog("finish: heard=\"\(heard)\" peak=\(String(format: "%.2f", peak)) error=\(error ?? "none")")
         teardown()
         guard heard.isEmpty else {
             onFinish?(heard)

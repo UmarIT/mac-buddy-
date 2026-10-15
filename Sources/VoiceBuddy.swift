@@ -18,6 +18,7 @@ final class VoiceBuddy {
     private let settings: BuddySettings
     private let listener = Listener()
     let gemini = GeminiBrain()
+    let fast = FastGemini()
     private var clearTimer: Timer?
     /// Listen for a reply once the current line has been spoken.
     private var listenAfterSpeaking = false
@@ -48,6 +49,7 @@ final class VoiceBuddy {
             listener.stop()
         case .thinking:
             gemini.cancel()
+            fast.cancel()
             model.setVoice(.off)
             Speaker.shared.say("Okay, never mind.")
         case .off, .answering(_):
@@ -58,6 +60,7 @@ final class VoiceBuddy {
     /// Starts a fresh conversation (the buddy forgets earlier requests).
     func newConversation() {
         gemini.reset()
+        fast.reset()
         Speaker.shared.say("Fresh start! What's up?")
     }
 
@@ -98,12 +101,43 @@ final class VoiceBuddy {
             answer(done, thenListen: false)
             return
         }
-        // Everything else goes to Gemini, which answers or does it on your Mac.
         model.setVoice(.thinking)
+
+        // Fast path: chat straight with the Gemini API (about a second). Only requests that need
+        // doing something on the Mac go to the slower agent.
+        if FastGemini.isAvailable {
+            fast.chat(request, system: FastGemini.chatSystem(language: settings.language, canAct: settings.geminiActs)) { [weak self] outcome in
+                guard let self, self.model.voice == .thinking else { return }
+                switch outcome {
+                case .reply(let text):
+                    self.answer(text, thenListen: keepTalking)
+                case .action:
+                    self.askAgent(request, keepTalking: keepTalking)
+                case .failed(let problem):
+                    self.answer(problem.isEmpty ? "Sorry, something went wrong." : problem, thenListen: false)
+                }
+            }
+            return
+        }
+        askAgent(request, keepTalking: keepTalking)
+    }
+
+    /// The Antigravity agent: slower, but it can act on the Mac.
+    private func askAgent(_ request: String, keepTalking: Bool) {
+        if !FastGemini.isAvailable || settings.geminiActs {
+            // A quick "on it" so you know it's working while the agent starts.
+            if FastGemini.isAvailable { Speaker.shared.say(Self.onIt(settings.language)) }
+        }
         gemini.ask(request, canAct: settings.geminiActs, language: settings.language) { [weak self] reply in
             guard let self, self.model.voice == .thinking else { return }
+            self.fast.remember(user: request, reply: Lingo.split(reply).show)
             self.answer(reply, thenListen: keepTalking)
         }
+    }
+
+    private static func onIt(_ language: String) -> String {
+        language == "en" ? ["On it!", "Okay, doing it now.", "Sure, one moment."].randomElement()!
+                         : ["अच्छा, अभी करता हूँ।", "ठीक है, एक मिनट।", "On it!"].randomElement()!
     }
 
     private func answer(_ reply: String, thenListen: Bool) {

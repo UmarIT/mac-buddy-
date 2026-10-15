@@ -104,6 +104,8 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash
 agy        # opens your browser once to sign in with Google, then type /exit
 ```
 
+**Make it fast (recommended):** get a free Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and paste it in **Settings → Behavior → Voice assistant → Gemini API key**. Chatting then goes straight to Gemini and answers in about a second; only requests to *do* something on your Mac use the slower Antigravity agent. The key is stored in your macOS Keychain.
+
 Then double-click the buddy and speak. The first time, click **Allow** for **Microphone** and **Speech Recognition** (and for any app Gemini controls, such as Notes or Reminders).
 
 > [!WARNING]
@@ -213,7 +215,8 @@ Sources/
   NowPlaying.swift      Reads what you're playing, watching or working on and picks a reaction
   Listener.swift        Microphone + speech-to-text (on-device when supported)
   Commands.swift        Instant built-in commands (open apps/sites, play songs, volume, timers…)
-  Gemini.swift          Sends everything else to Gemini via the Antigravity CLI (agy -p)
+  FastGemini.swift      Fast chat straight to the Gemini API (with your free key, kept in the Keychain)
+  Gemini.swift          Requests that need action go to the Antigravity agent (agy -p)
   VoiceBuddy.swift      Listen → do it → answer out loud → listen for your reply
   Companion.swift       Talks by itself: greetings, comments, break and bedtime reminders
   Language.swift        English / Urdu / Punjabi: recognizer choice, reply format, Roman Urdu commands

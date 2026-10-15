@@ -185,11 +185,16 @@ final class Companion {
         \(Lingo.rules(settings.language))
         Reply with only that sentence\(settings.language == "en" ? "" : " (in the SHOW/SAY format)").
         """
-        voice.gemini.remark(prompt) { [weak self] line in
+        let finish: @MainActor (String?) -> Void = { [weak self] line in
             guard let self else { return }
             self.waitingForGemini = false
             let text = (line?.isEmpty == false && line!.count < 600) ? line! : fallback
             self.voice.speakUp(text, invitesReply: asks || text.hasSuffix("?"))
+        }
+        if FastGemini.isAvailable {
+            Task { finish(await FastGemini.oneShot(prompt)) }   // about a second
+        } else {
+            voice.gemini.remark(prompt, completion: finish)
         }
     }
 }

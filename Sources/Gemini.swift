@@ -63,7 +63,7 @@ final class GeminiJob: @unchecked Sendable {
     in plain spoken language in at most three short sentences, with no markdown, lists, emoji, \
     links or file paths unless they ask for them.
 
-    You are running on the user's macOS computer, in their home folder. When they ask you to do \
+    You are running on the user's macOS computer. Their files are in \(NSHomeDirectory()). When they ask you to do \
     something, do it yourself with shell commands, then say in one sentence what you did. Useful \
     commands: `open -a "App Name"` to open apps, `open "https://..."` for websites, and `osascript` \
     with AppleScript to control apps such as Music, Finder, Safari, Google Chrome, Notes, \
@@ -139,7 +139,10 @@ final class GeminiJob: @unchecked Sendable {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: agy.path)
         p.arguments = args
-        p.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        // A small empty folder: running in the home folder makes the agent look through all your files first.
+        let workspace = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mac-buddy/workspace")
+        try? FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+        p.currentDirectoryURL = workspace
         p.environment = agy.environment
 
         let stdout = Pipe()

@@ -179,6 +179,7 @@ private struct BehaviorTab: View {
     @ObservedObject var settings: BuddySettings
     let onResetPosition: () -> Void
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var apiKey = GeminiKey.value ?? ""
 
     var body: some View {
         Form {
@@ -225,6 +226,10 @@ private struct BehaviorTab: View {
 
             Section {
                 Toggle("Talk to Buddy (double-click it or press \(HotKey.defaultLabel))", isOn: $settings.voiceAssistant)
+                SecureField("Gemini API key (free, makes answers much faster)", text: $apiKey)
+                    .onChange(of: apiKey) { _, key in GeminiKey.save(key) }
+                Link("Get a free Gemini API key", destination: URL(string: "https://aistudio.google.com/apikey")!)
+                    .font(.caption)
                 Picker("Language", selection: $settings.language) {
                     Text("Auto: English, Urdu & Punjabi").tag("auto")
                     Text("English").tag("en")

@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import Speech
 
@@ -26,13 +27,15 @@ final class Listener {
         SFSpeechRecognizer.requestAuthorization(Self.onMain { [weak self] (status: SFSpeechRecognizerAuthorizationStatus) in
             guard let self, self.isListening else { return }
             guard status == .authorized else {
-                self.fail("Speech recognition is turned off for Mac Buddy. Turn it on in System Settings, Privacy and Security, Speech Recognition.")
+                Self.openPrivacySettings("Privacy_SpeechRecognition")
+                self.fail("Speech recognition is blocked for Mac Buddy. I opened the settings: switch Mac Buddy on, then try again.")
                 return
             }
             AVCaptureDevice.requestAccess(for: .audio, completionHandler: Self.onMain { [weak self] (granted: Bool) in
                 guard let self, self.isListening else { return }
                 guard granted else {
-                    self.fail("I can't hear you. Allow microphone access for Mac Buddy in System Settings, Privacy and Security, Microphone.")
+                    Self.openPrivacySettings("Privacy_Microphone")
+                    self.fail("The microphone is blocked for Mac Buddy. I opened the settings: switch Mac Buddy on, then try again.")
                     return
                 }
                 self.begin()
@@ -132,6 +135,13 @@ final class Listener {
         request?.endAudio(); request = nil
         task?.cancel(); task = nil
         recognizer = nil
+    }
+
+    /// Opens System Settings at Privacy & Security → the given pane.
+    private static func openPrivacySettings(_ pane: String) {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     // Callbacks from Apple's frameworks arrive on background threads. These helpers are

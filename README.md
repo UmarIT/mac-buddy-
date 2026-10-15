@@ -270,6 +270,20 @@ The app isn't notarized yet. Go to **System Settings → Privacy & Security** an
 Yes, Cursor works too (see Option 3). Beyond that, anything that writes a JSON file like `{"event": "PreToolUse", "tool": "Bash", "cwd": "/path"}` into `~/.mac-buddy/sessions/` will drive the buddy, so it's easy to hook up to other agents or scripts.
 </details>
 
+<details>
+<summary><b>The buddy says it can't hear me, even though I clicked Allow.</b></summary>
+
+Apps built from source are signed ad hoc, so after a rebuild macOS can keep an old "blocked" setting and silently refuse. Reset the permissions and open the app again:
+
+```bash
+tccutil reset Microphone io.github.mohsin2596.macbuddy
+tccutil reset SpeechRecognition io.github.mohsin2596.macbuddy
+killall MacBuddy; open ~/Applications/MacBuddy.app
+```
+
+Then double-click the buddy and click **Allow** for both. You may need to do this again after updating.
+</details>
+
 ## Contributing
 
 Contributions are very welcome, whether that's new accessories, animations, reactions, or bug fixes.

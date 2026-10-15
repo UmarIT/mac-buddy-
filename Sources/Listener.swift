@@ -41,13 +41,15 @@ final class Listener {
     /// True when listening for a reply on its own: silence then just ends quietly.
     private var quiet = false
     private var firstWait: TimeInterval = 7
+    private var locales: [String] = []
 
     /// Asks for permission the first time, then starts listening. `quiet`: if nothing is said,
     /// finish silently (used when the buddy listens for your reply by itself).
-    func start(quiet: Bool = false, firstWait: TimeInterval = 7) {
+    func start(quiet: Bool = false, firstWait: TimeInterval = 7, locales: [String] = []) {
         guard !isListening else { return }
         self.quiet = quiet
         self.firstWait = firstWait
+        self.locales = locales
         isListening = true
         transcript = ""
         lastError = nil
@@ -86,8 +88,9 @@ final class Listener {
     // MARK: Internals
 
     private func begin() {
-        // Your Mac's language first; if that isn't supported (e.g. English (Pakistan)), US English.
-        let candidates = [SFSpeechRecognizer(), SFSpeechRecognizer(locale: Locale(identifier: "en-US"))].compactMap { $0 }
+        // The chosen languages first; then your Mac's language; then US English.
+        let candidates = (locales.map { SFSpeechRecognizer(locale: Locale(identifier: $0)) }
+            + [SFSpeechRecognizer(), SFSpeechRecognizer(locale: Locale(identifier: "en-US"))]).compactMap { $0 }
         guard let recognizer = candidates.first(where: { $0.isAvailable }) else {
             fail("Speech recognition isn't available right now. Check your internet connection, and that Dictation is on in System Settings, Keyboard.")
             return
@@ -134,7 +137,7 @@ final class Listener {
         if let text, !text.isEmpty, text != transcript {
             transcript = text
             onPartial?(text)
-            restartSilenceTimer(after: 1.6)   // a short pause means you're done talking
+            restartSilenceTimer(after: 1.1)   // a short pause means you're done talking
         }
         if let error { lastError = error; voiceLog("recognition error: \(error)") }
         if isFinal || error != nil { finish() }

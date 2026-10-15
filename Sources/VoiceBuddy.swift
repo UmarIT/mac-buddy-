@@ -67,6 +67,8 @@ final class VoiceBuddy {
         answer(line, thenListen: invitesReply && settings.voiceAssistant)
     }
 
+    var language: String { settings.language }
+
     // MARK: Flow
 
     private func listen(followUp: Bool) {
@@ -75,7 +77,7 @@ final class VoiceBuddy {
         Speaker.shared.stop()
         self.followUp = followUp
         model.setVoice(.listening(""))
-        listener.start(quiet: followUp, firstWait: followUp ? 6 : 7)
+        listener.start(quiet: followUp, firstWait: followUp ? 6 : 7, locales: Lingo.recognizerLocales(settings.language))
     }
 
     private func heard(_ text: String) {
@@ -91,22 +93,25 @@ final class VoiceBuddy {
         let keepTalking = settings.keepConversation && !Self.isGoodbye(request)
 
         // Simple things happen instantly, without using Gemini: open apps, play songs, volume, timers…
-        if settings.instantCommands, let done = QuickCommands.handle(request) {
+        if settings.instantCommands,
+           let done = QuickCommands.handle(request) ?? QuickCommands.handle(Lingo.englishCommand(request)) {
             answer(done, thenListen: false)
             return
         }
         // Everything else goes to Gemini, which answers or does it on your Mac.
         model.setVoice(.thinking)
-        gemini.ask(request, canAct: settings.geminiActs) { [weak self] reply in
+        gemini.ask(request, canAct: settings.geminiActs, language: settings.language) { [weak self] reply in
             guard let self, self.model.voice == .thinking else { return }
             self.answer(reply, thenListen: keepTalking)
         }
     }
 
-    private func answer(_ text: String, thenListen: Bool) {
+    private func answer(_ reply: String, thenListen: Bool) {
+        // Gemini may send "SHOW: Roman Urdu / SAY: Devanagari"; plain text is used for both.
+        let (text, spoken) = Lingo.split(reply)
         listenAfterSpeaking = thenListen
         model.setVoice(.answering(text))
-        Speaker.shared.say(text)
+        Speaker.shared.say(spoken, display: text)
         // Keep the answer on screen about as long as it takes to say it (a fallback if no voice).
         let words = Double(text.split(separator: " ").count)
         clearTimer?.invalidate()

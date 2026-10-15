@@ -135,6 +135,8 @@ final class BuddySettings: ObservableObject {
     @Published var instantCommands = true { didSet { save(instantCommands, "instantCommands") } }
     /// 0 off, 1 quiet, 2 normal, 3 chatty: how often the buddy talks by itself.
     @Published var chattiness = 2 { didSet { save(chattiness, "chattiness") } }
+    /// "auto" (English/Urdu/Punjabi mix), "en", "ur" or "pa".
+    @Published var language = "auto" { didSet { save(language, "language") } }
     /// After the buddy speaks, listen for your reply by itself.
     @Published var keepConversation = true { didSet { save(keepConversation, "keepConversation") } }
     /// Let Gemini write what the buddy says by itself (otherwise built-in lines).
@@ -178,6 +180,7 @@ final class BuddySettings: ObservableObject {
         geminiActs = v("geminiActs", true)
         instantCommands = v("instantCommands", true)
         chattiness = v("chattiness", 2)
+        language = v("language", "auto")
         keepConversation = v("keepConversation", true)
         geminiRemarks = v("geminiRemarks", true)
         showBubble = v("showBubble", true)

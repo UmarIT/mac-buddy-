@@ -9,11 +9,11 @@ final class GeminiBrain {
     private var lastUsed = Date.distantPast
     private var current: GeminiJob?
 
-    func ask(_ request: String, canAct: Bool, completion: @escaping @MainActor (String) -> Void) {
+    func ask(_ request: String, canAct: Bool, language: String, completion: @escaping @MainActor (String) -> Void) {
         if Date().timeIntervalSince(lastUsed) > 15 * 60 { conversationID = nil }
         lastUsed = Date()
         current?.cancel()
-        let job = GeminiJob(request: request, conversation: conversationID, canAct: canAct)
+        let job = GeminiJob(request: request, conversation: conversationID, canAct: canAct, language: language)
         current = job
         Task.detached {
             let reply = job.run()
@@ -61,7 +61,7 @@ final class GeminiJob: @unchecked Sendable {
     you by voice: their words come from speech recognition and may contain small mistakes, so work \
     out what they most likely meant. Your reply is read aloud by a text-to-speech voice, so answer \
     in plain spoken language in at most three short sentences, with no markdown, lists, emoji, \
-    links or file paths unless they ask for them. Reply in the language they spoke.
+    links or file paths unless they ask for them.
 
     You are running on the user's macOS computer, in their home folder. When they ask you to do \
     something, do it yourself with shell commands, then say in one sentence what you did. Useful \
@@ -81,12 +81,14 @@ final class GeminiJob: @unchecked Sendable {
     private let canAct: Bool
     /// Send the request exactly as given: no persona, no conversation, never acts.
     private let raw: Bool
+    private let language: String
     private let lock = NSLock()
     private var process: Process?
     private var cancelled = false
 
-    init(request: String, conversation: String?, canAct: Bool, raw: Bool = false) {
+    init(request: String, conversation: String?, canAct: Bool, raw: Bool = false, language: String = "auto") {
         self.request = request
+        self.language = language
         self.conversation = conversation
         self.canAct = canAct && !raw
         self.raw = raw
@@ -108,23 +110,31 @@ final class GeminiJob: @unchecked Sendable {
             return Reply(text: "I need Gemini to think. Open Terminal, install the Antigravity CLI, and run agy once to sign in with your Google account.",
                          conversation: nil)
         }
-        let first = attempt(agy, conversation: conversation)
-        // If an old conversation can't be continued, quietly start a new one.
-        if first.retryFresh, conversation != nil, !isCancelled {
-            return attempt(agy, conversation: nil).reply
+        let started = Date()
+        var result = attempt(agy, conversation: conversation, fast: true)
+        // If the speed setting isn't supported by this version of agy, try once without it.
+        if result.retryPlain, !isCancelled {
+            result = attempt(agy, conversation: conversation, fast: false)
         }
-        return first.reply
+        // If an old conversation can't be continued, quietly start a new one.
+        if result.retryFresh, conversation != nil, !isCancelled {
+            result = attempt(agy, conversation: nil, fast: true)
+        }
+        voiceLog("gemini \(raw ? "remark" : "reply") took \(String(format: "%.1f", Date().timeIntervalSince(started)))s ok=\(result.reply.ok)")
+        return result.reply
     }
 
-    private func attempt(_ agy: AgyLocator.Found, conversation: String?) -> (reply: Reply, retryFresh: Bool) {
+    private func attempt(_ agy: AgyLocator.Found, conversation: String?, fast: Bool)
+        -> (reply: Reply, retryFresh: Bool, retryPlain: Bool) {
         // The persona goes with the first message of a conversation; follow-ups just send the request.
         let prompt = raw ? request
             : conversation == nil
-            ? "\(Self.persona)\n\nThe user said: \(request)"
+            ? "\(Self.persona)\n\n\(Lingo.rules(language))\n\nThe user said: \(request)"
             : "The user said: \(request)"
         var args = ["-p", prompt, "--output-format", "json"]
         if let conversation { args += ["--conversation", conversation] }
         if canAct { args.append("--dangerously-skip-permissions") }   // lets it run commands without asking
+        if fast { args += ["--effort", "low"] }   // much quicker answers; plenty for a chatty assistant
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: agy.path)
@@ -142,12 +152,12 @@ final class GeminiJob: @unchecked Sendable {
         p.standardError = try? FileHandle(forWritingTo: errURL)
 
         lock.lock()
-        if cancelled { lock.unlock(); return (Reply(text: "", conversation: nil), false) }
+        if cancelled { lock.unlock(); return (Reply(text: "", conversation: nil), false, false) }
         do {
             try p.run()
         } catch {
             lock.unlock()
-            return (Reply(text: "I couldn't start Gemini.", conversation: nil), false)
+            return (Reply(text: "I couldn't start Gemini.", conversation: nil), false, false)
         }
         process = p
         lock.unlock()
@@ -159,14 +169,14 @@ final class GeminiJob: @unchecked Sendable {
 
         let out = stdout.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        if isCancelled { return (Reply(text: "", conversation: nil), false) }
+        if isCancelled { return (Reply(text: "", conversation: nil), false, false) }
 
         // {"conversation_id": "...", "status": "SUCCESS", "response": "...", "error": ...}
         let json = Self.lastJSONObject(in: out)
         let id = json?["conversation_id"] as? String
         let status = (json?["status"] as? String)?.uppercased()
         if let text = json?["response"] as? String, !text.isEmpty, status == nil || status == "SUCCESS" {
-            return (Reply(text: text.trimmingCharacters(in: .whitespacesAndNewlines), conversation: id, ok: true), false)
+            return (Reply(text: text.trimmingCharacters(in: .whitespacesAndNewlines), conversation: id, ok: true), false, false)
         }
 
         let err = ((try? String(contentsOf: errURL, encoding: .utf8)) ?? "") + " "
@@ -174,20 +184,22 @@ final class GeminiJob: @unchecked Sendable {
         let lower = err.lowercased()
         if lower.contains("authentication") || lower.contains("sign in") || lower.contains("login") || lower.contains("log in") {
             return (Reply(text: "Gemini isn't signed in yet. Open Terminal, run agy, and sign in with your Google account. Then ask me again.",
-                          conversation: nil), false)
+                          conversation: nil), false, false)
         }
         if lower.contains("quota") || lower.contains("rate limit") || lower.contains("resource_exhausted") || lower.contains("429") {
-            return (Reply(text: "I've used up today's Gemini limit. Try again a bit later.", conversation: id), false)
+            return (Reply(text: "I've used up today's Gemini limit. Try again a bit later.", conversation: id), false, false)
         }
         if p.terminationReason == .uncaughtSignal || status == "CANCELED" || status == "INTERRUPTED" {
-            return (Reply(text: "That took too long, so I stopped. Try asking in a simpler way.", conversation: id), false)
+            return (Reply(text: "That took too long, so I stopped. Try asking in a simpler way.", conversation: id), false, false)
         }
         if status == "WAITING" {
             return (Reply(text: "Gemini wanted permission to do that. Turn on Let Gemini do things for me in my settings, then ask again.",
-                          conversation: id), false)
+                          conversation: id), false, false)
         }
-        if conversation != nil { return (Reply(text: "", conversation: nil), true) }
-        return (Reply(text: "Sorry, something went wrong while I was thinking. Please try again.", conversation: nil), false)
+        // agy didn't accept the speed setting: retry without it.
+        if fast, lower.contains("effort") { return (Reply(text: "", conversation: id), false, true) }
+        if conversation != nil { return (Reply(text: "", conversation: nil), true, false) }
+        return (Reply(text: "Sorry, something went wrong while I was thinking. Please try again.", conversation: nil), false, false)
     }
 
     /// The JSON envelope, even if something printed a stray line before it.

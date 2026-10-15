@@ -9,6 +9,8 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     private let synth = AVSpeechSynthesizer()
     /// The text being spoken (after cleanup), and how much of it has been said so far.
     private(set) var text = ""
+    /// What the bubble shows while speaking (e.g. Roman Urdu while the voice reads Devanagari).
+    private(set) var display = ""
     private(set) var spokenUpTo = 0
     private(set) var isSpeaking = false
     /// Called when a line has been spoken all the way through (not when it's cut off).
@@ -22,16 +24,20 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
         synth.delegate = self
     }
 
-    func say(_ line: String) {
+    /// Speaks `line`. `display` is what the bubble types along with it, if different.
+    func say(_ line: String, display: String? = nil) {
         let clean = Self.speakable(line)
         guard !clean.isEmpty else { return }
         if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
         text = clean
+        self.display = display.map(Self.speakable) ?? clean
         spokenUpTo = 0
         isSpeaking = true
         wordStarted = Date()
         let utterance = AVSpeechUtterance(string: clean)
         utterance.pitchMultiplier = 1.2   // a little higher, to suit a small buddy
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.06   // a touch quicker
+        if let voice = Self.voice(for: clean) { utterance.voice = voice }
         currentID = ObjectIdentifier(utterance)
         synth.speak(utterance)
     }
@@ -51,10 +57,17 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     /// The part of the text said so far, ending with the current word, at most `limit` characters.
+    /// When the bubble shows a different version (Roman Urdu), it advances by the same proportion.
     func typedSoFar(limit: Int) -> String {
-        let ns = text as NSString
-        let end = isSpeaking ? min(spokenUpTo, ns.length) : ns.length
-        let said = ns.substring(to: end).trimmingCharacters(in: .whitespaces)
+        let spoken = text as NSString
+        let shown = display as NSString
+        let progress = spoken.length == 0 ? 1 : Double(min(spokenUpTo, spoken.length)) / Double(spoken.length)
+        var end = isSpeaking ? Int((Double(shown.length) * progress).rounded()) : shown.length
+        if isSpeaking, end < shown.length {   // finish the current word
+            let rest = shown.range(of: " ", options: [], range: NSRange(location: end, length: shown.length - end))
+            end = rest.location == NSNotFound ? shown.length : rest.location
+        }
+        let said = shown.substring(to: min(end, shown.length)).trimmingCharacters(in: .whitespaces)
         guard said.count > limit else { return said }
         return "…" + String(said.suffix(limit - 1))
     }
@@ -95,6 +108,22 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
                 if self.currentID == id { self.isSpeaking = false }
             }
         }
+    }
+
+    /// Hindi voice for Devanagari (Urdu/Punjabi replies), an Urdu voice for Urdu script if one is
+    /// installed, otherwise the Mac's default voice.
+    private static func voice(for text: String) -> AVSpeechSynthesisVoice? {
+        let scalars = text.unicodeScalars
+        if scalars.contains(where: { (0x0900...0x097F).contains($0.value) }) {
+            return AVSpeechSynthesisVoice(language: "hi-IN")
+        }
+        if scalars.contains(where: { (0x0600...0x06FF).contains($0.value) }) {
+            return AVSpeechSynthesisVoice(language: "ur-PK") ?? AVSpeechSynthesisVoice(language: "ur-IN")
+        }
+        if scalars.contains(where: { (0x0A00...0x0A7F).contains($0.value) }) {
+            return AVSpeechSynthesisVoice(language: "pa-IN")
+        }
+        return nil
     }
 
     /// Drops emoji and decoration like "*yawn*" so the voice doesn't read them out.

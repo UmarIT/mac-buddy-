@@ -182,12 +182,13 @@ final class Companion {
         Say ONE short, warm, casual sentence to \(name) about it, like a friend sitting next to them \
         (at most 18 words, no emoji, no quotes, no markdown). \
         \(asks ? "End with a light, friendly question." : "Don't ask a question.") \
-        Reply with only that sentence.
+        \(Lingo.rules(settings.language))
+        Reply with only that sentence\(settings.language == "en" ? "" : " (in the SHOW/SAY format)").
         """
         voice.gemini.remark(prompt) { [weak self] line in
             guard let self else { return }
             self.waitingForGemini = false
-            let text = (line?.isEmpty == false && line!.count < 200) ? line! : fallback
+            let text = (line?.isEmpty == false && line!.count < 600) ? line! : fallback
             self.voice.speakUp(text, invitesReply: asks || text.hasSuffix("?"))
         }
     }

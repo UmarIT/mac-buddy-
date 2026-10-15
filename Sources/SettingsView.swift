@@ -225,6 +225,13 @@ private struct BehaviorTab: View {
 
             Section {
                 Toggle("Talk to Buddy (double-click it or press \(HotKey.defaultLabel))", isOn: $settings.voiceAssistant)
+                Picker("Language", selection: $settings.language) {
+                    Text("Auto: English, Urdu & Punjabi").tag("auto")
+                    Text("English").tag("en")
+                    Text("Urdu").tag("ur")
+                    Text("Punjabi").tag("pa")
+                }
+                .disabled(!settings.voiceAssistant)
                 Toggle("Let Gemini do things on my Mac", isOn: $settings.geminiActs)
                     .disabled(!settings.voiceAssistant)
                 Toggle("Do simple commands instantly (open apps, play songs, volume, timers)", isOn: $settings.instantCommands)

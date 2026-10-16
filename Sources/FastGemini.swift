@@ -126,7 +126,7 @@ final class FastGemini {
 
     private static func groqGenerate(turns: [(role: String, text: String)], system: String?, key: String) async -> Outcome {
         let started = Date()
-        let models = groqModel.map { [$0] + groqModels.filter { m in m != $0 } } ?? groqModels
+        let models = groqModel.map { first in [first] + groqModels.filter { $0 != first } } ?? groqModels
         var messages: [[String: String]] = []
         if let system { messages.append(["role": "system", "content": system]) }
         messages += turns.map { ["role": $0.role == "model" ? "assistant" : "user", "content": $0.text] }
@@ -172,7 +172,7 @@ final class FastGemini {
     private static func geminiGenerate(turns: [(role: String, text: String)], system: String?) async -> Outcome {
         guard let key = GeminiKey.value else { return .failed("No API key.") }
         let started = Date()
-        let candidates = workingModel.map { [$0] + models.filter { m in m != $0 } } ?? models
+        let candidates = workingModel.map { first in [first] + models.filter { $0 != first } } ?? models
         var lastProblem = "Sorry, I couldn't reach Gemini. Please try again."
         for model in candidates {
             for withThinkingSetting in [true, false] {

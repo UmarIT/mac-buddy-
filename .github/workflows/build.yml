@@ -1,0 +1,24 @@
+name: Build & test (macOS)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swiftc --version
+
+      - name: Build the app (Apple silicon + Intel)
+        run: |
+          set -o pipefail
+          # Turn compiler errors into GitHub annotations so they show up on the commit.
+          ./build.sh 2>&1 | tee build.log | sed -E 's#^(/[^:]*/)?(Sources/[^:]+):([0-9]+):([0-9]+): error: (.*)$#::error file=\2,line=\3,col=\4::\5#'
+
+      - name: Logic tests
+        run: Tests/run.sh

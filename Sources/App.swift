@@ -366,14 +366,15 @@ enum MacBuddyApp {
             exit(0)
         }
         // MacBuddy --set-gemini-key <key>: saves the Gemini API key to the Keychain.
-        if let i = args.firstIndex(of: "--set-gemini-key") {
+        for (flag, store, name) in [("--set-gemini-key", GeminiKey, "Gemini"), ("--set-groq-key", GroqKey, "Groq")] {
+            guard let i = args.firstIndex(of: flag) else { continue }
             let rest = Array(args[args.index(after: i)...])
             guard let key = rest.first, !key.isEmpty else {
-                FileHandle.standardError.write(Data("Usage: MacBuddy --set-gemini-key <your key>\n".utf8))
+                FileHandle.standardError.write(Data("Usage: MacBuddy \(flag) <your key>\n".utf8))
                 exit(1)
             }
-            GeminiKey.save(key)
-            print("Gemini API key saved. Restart Mac Buddy to use it.")
+            store.save(key)
+            print("\(name) API key saved. Restart Mac Buddy to use it.")
             exit(0)
         }
         if args.contains("--connect") || args.contains("--disconnect") {

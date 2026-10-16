@@ -352,19 +352,25 @@ private struct SliderRow: View {
 private struct VoiceTab: View {
     @ObservedObject var settings: BuddySettings
     @State private var apiKey = GeminiKey.value ?? ""
+    @State private var groqKey = GroqKey.value ?? ""
 
     var body: some View {
         Form {
             Section {
+                SecureField("Groq API key (fastest)", text: $groqKey, prompt: Text("Paste your key here"))
+                    .onChange(of: groqKey) { _, key in GroqKey.save(key) }
+                Link("Get a free Groq API key →", destination: URL(string: "https://console.groq.com/keys")!)
                 SecureField("Gemini API key", text: $apiKey, prompt: Text("Paste your key here"))
                     .onChange(of: apiKey) { _, key in GeminiKey.save(key) }
                 Link("Get a free Gemini API key →", destination: URL(string: "https://aistudio.google.com/apikey")!)
             } header: {
                 Text("Speed")
             } footer: {
-                Text(apiKey.isEmpty
-                     ? "Without a key, every answer goes through the slower Antigravity agent. With a free key, chatting answers in about a second."
-                     : "Key saved in your Keychain. Chatting now goes straight to Gemini.")
+                Text(groqKey.isEmpty && apiKey.isEmpty
+                     ? "Without a key, every answer goes through the slower Antigravity agent. Add a free Groq or Gemini key and chatting answers in about a second."
+                     : groqKey.isEmpty
+                     ? "Gemini key saved in your Keychain. Chatting goes straight to Gemini."
+                     : "Groq key saved in your Keychain. Chatting goes to Groq first\(apiKey.isEmpty ? "" : ", with Gemini as a backup").")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

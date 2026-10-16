@@ -3,18 +3,21 @@ import Security
 
 // MARK: - API key (kept in the macOS Keychain)
 
-enum GeminiKey {
-    private static let service = "io.github.mohsin2596.macbuddy.gemini-api-key"
-    nonisolated(unsafe) private static var cached: String?
-    private static let lock = NSLock()
+/// An API key kept in the macOS Keychain.
+final class KeychainKey: @unchecked Sendable {
+    private let service: String
+    private var cached: String?
+    private let lock = NSLock()
 
-    static var value: String? {
+    init(service: String) { self.service = service }
+
+    var value: String? {
         lock.lock(); defer { lock.unlock() }
         if cached == nil { cached = read() ?? "" }
         return cached?.isEmpty == false ? cached : nil
     }
 
-    static func save(_ key: String) {
+    func save(_ key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         lock.lock(); cached = trimmed; lock.unlock()
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service]
@@ -25,7 +28,7 @@ enum GeminiKey {
         SecItemAdd(add as CFDictionary, nil)
     }
 
-    private static func read() -> String? {
+    private func read() -> String? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                     kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var item: CFTypeRef?
@@ -34,7 +37,10 @@ enum GeminiKey {
     }
 }
 
-// MARK: - Fast chat straight to the Gemini API
+let GeminiKey = KeychainKey(service: "io.github.mohsin2596.macbuddy.gemini-api-key")
+let GroqKey = KeychainKey(service: "io.github.mohsin2596.macbuddy.groq-api-key")
+
+// MARK: - Fast chat straight to Groq or the Gemini API
 
 /// Talks to Gemini directly over HTTPS (about a second per answer), instead of starting the
 /// Antigravity agent for every question. Requests that need doing something on the Mac come back
@@ -54,7 +60,7 @@ final class FastGemini {
     nonisolated(unsafe) private static var workingModel: String?
     private static let models = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-flash-latest"]
 
-    static var isAvailable: Bool { GeminiKey.value != nil }
+    static var isAvailable: Bool { GroqKey.value != nil || GeminiKey.value != nil }
 
     func reset() { history = [] }
 
@@ -100,8 +106,71 @@ final class FastGemini {
 
     // MARK: HTTP
 
+    /// Groq first (fastest) when there's a Groq key, then Gemini.
     private static func generate(turns: [(role: String, text: String)], system: String?) async -> Outcome {
-        guard let key = GeminiKey.value else { return .failed("No Gemini API key.") }
+        if let groq = GroqKey.value {
+            let outcome = await groqGenerate(turns: turns, system: system, key: groq)
+            if case .failed(let problem) = outcome, GeminiKey.value != nil, !problem.isEmpty {
+                voiceLog("groq failed (\(problem)); trying Gemini")
+                return await geminiGenerate(turns: turns, system: system)
+            }
+            return outcome
+        }
+        return await geminiGenerate(turns: turns, system: system)
+    }
+
+    // MARK: Groq (OpenAI-compatible)
+
+    nonisolated(unsafe) private static var groqModel: String?
+    private static let groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+
+    private static func groqGenerate(turns: [(role: String, text: String)], system: String?, key: String) async -> Outcome {
+        let started = Date()
+        let models = groqModel.map { [$0] + groqModels.filter { m in m != $0 } } ?? groqModels
+        var messages: [[String: String]] = []
+        if let system { messages.append(["role": "system", "content": system]) }
+        messages += turns.map { ["role": $0.role == "model" ? "assistant" : "user", "content": $0.text] }
+
+        for model in models {
+            guard let url = URL(string: "https://api.groq.com/openai/v1/chat/completions") else { break }
+            var request = URLRequest(url: url, timeoutInterval: 20)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            let body: [String: Any] = ["model": model, "messages": messages, "max_tokens": 400, "temperature": 0.7]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+            guard let pair = try? await URLSession.shared.data(for: request) else {
+                return .failed(Task.isCancelled ? "" : "I couldn't reach Groq. Check your internet connection.")
+            }
+            let (data, response) = pair
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 {
+                groqModel = model
+                voiceLog("groq (\(model)) took \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
+                guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                      let choices = json["choices"] as? [[String: Any]],
+                      let message = choices.first?["message"] as? [String: Any],
+                      let answer = (message["content"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !answer.isEmpty else { return .failed("Sorry, I didn't get an answer. Try again.") }
+                let shown = Lingo.split(answer).show.uppercased()
+                if shown.hasPrefix("ACTION") && shown.count < 20 { return .action }
+                return .reply(answer)
+            }
+            let text = String(decoding: data, as: UTF8.self)
+            voiceLog("groq (\(model)) HTTP \(status): \(text.prefix(200))")
+            if status == 401 { return .failed("Your Groq API key isn't working. Check it in my settings.") }
+            if status == 429 { continue }   // this model's limit is used up: try the smaller one
+            if status == 404 || status == 400 { continue }
+            return .failed("Groq had a problem answering. Please try again.")
+        }
+        return .failed("I've hit the Groq limit for now. Try again in a minute.")
+    }
+
+    // MARK: Gemini
+
+    private static func geminiGenerate(turns: [(role: String, text: String)], system: String?) async -> Outcome {
+        guard let key = GeminiKey.value else { return .failed("No API key.") }
         let started = Date()
         let candidates = workingModel.map { [$0] + models.filter { m in m != $0 } } ?? models
         var lastProblem = "Sorry, I couldn't reach Gemini. Please try again."

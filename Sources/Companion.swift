@@ -35,9 +35,9 @@ final class Companion {
     /// Minimum seconds between things it says on its own.
     private var gap: TimeInterval {
         switch settings.chattiness {
-        case 1: return 15 * 60   // quiet
-        case 3: return 90        // chatty
-        default: return 5 * 60   // normal
+        case 1: return 30 * 60   // now and then
+        case 3: return 5 * 60    // chatty
+        default: return 15 * 60  // normal
         }
     }
 
@@ -45,8 +45,11 @@ final class Companion {
 
     // MARK: Greeting
 
+    private var lastGreeting = Date.distantPast
+
     func greet(back: Bool = false) {
-        guard enabled else { return }
+        guard enabled, Date().timeIntervalSince(lastGreeting) > 3 * 3600 else { return }   // at most every 3 hours
+        lastGreeting = Date()
         let hour = Calendar.current.component(.hour, from: Date())
         let part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"
         let fallback = back ? "Welcome back, \(name)! I missed you." : "Good \(part), \(name)! I'm right here if you need me."
@@ -126,34 +129,22 @@ final class Companion {
             return ("happy:\(title)", "\(name) is playing an upbeat party song: \(title).",
                     "This one's a banger! Let's dance, \(name)!", false)
         case .groove:
-            return ("groove:\(title)", "\(name) is listening to: \(title).",
-                    "Nice song choice, \(name)!", false)
+            return nil   // any song: just nod along, no need to talk
         case .sport(let sport):
             return ("sport:\(sport.name)", "\(name) is watching \(sport.name): \(title).",
                     "Ooh, \(sport.name)! Who do you think will win, \(name)?", true)
-        case .work(let place):
-            return ("work:\(place)", "\(name) just started working in \(place).",
-                    "Let's get some work done, \(name)! I'm right here.", false)
+        case .work(_):
+            return nil   // don't interrupt work
         case .browse(let kind, let site):
             switch kind {
-            case .social:
-                return ("browse:\(site)", "\(name) is scrolling \(site).", "Scrolling \(site) again, \(name)? Anything interesting?", true)
-            case .shopping:
-                return ("browse:\(site)", "\(name) is shopping on \(site).", "Shopping on \(site)? Buying something nice, \(name)?", true)
             case .food:
                 return ("browse:\(site)", "\(name) is looking at food on \(site).", "Food time! What are you ordering, \(name)?", true)
             case .movie:
                 return ("browse:\(site)", "\(name) opened \(site) to watch something.", "Movie time! What are we watching, \(name)?", true)
             case .travel:
                 return ("browse:\(site)", "\(name) is planning travel on \(site).", "Planning a trip, \(name)? Where to?", true)
-            case .news:
-                return ("browse:\(site)", "\(name) is reading the news on \(site).", "Catching up on the news, \(name)?", false)
-            case .learning:
-                return ("browse:\(site)", "\(name) is learning on \(site).", "Learning something new? I love that, \(name)!", false)
-            case .games:
-                return ("browse:\(site)", "\(name) is playing games on \(site).", "Game time! Good luck, \(name)!", false)
-            case .chat, .search, .money, .other:
-                return nil   // private or too frequent to comment on
+            case .social, .shopping, .news, .learning, .games, .chat, .search, .money, .other:
+                return nil   // too frequent or private to comment on
             }
         }
     }
@@ -182,8 +173,8 @@ final class Companion {
         Say ONE short, warm, casual sentence to \(name) about it, like a friend sitting next to them \
         (at most 18 words, no emoji, no quotes, no markdown). \
         \(asks ? "End with a light, friendly question." : "Don't ask a question.") \
-        \(Lingo.rules(settings.language))
-        Reply with only that sentence\(settings.language == "en" ? "" : " (in the SHOW/SAY format)").
+        \(Lingo.rules(settings.language == "auto" ? "en" : settings.language))
+        Reply with only that sentence\(settings.language == "en" || settings.language == "auto" ? "" : " (in the SHOW/SAY format)").
         """
         let finish: @MainActor (String?) -> Void = { [weak self] line in
             guard let self else { return }

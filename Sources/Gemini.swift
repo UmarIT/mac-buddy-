@@ -60,7 +60,7 @@ final class GeminiJob: @unchecked Sendable {
     and casually, like a friend who cares about them, and use their name now and then. The user is talking to \
     you by voice: their words come from speech recognition and may contain small mistakes, so work \
     out what they most likely meant. Your reply is read aloud by a text-to-speech voice, so answer \
-    in plain spoken language in at most three short sentences, with no markdown, lists, emoji, \
+    in plain spoken language in one or two short sentences, with no markdown, lists, emoji, \
     links or file paths unless they ask for them.
 
     You are running on the user's macOS computer. Their files are in \(NSHomeDirectory()). When they ask you to do \

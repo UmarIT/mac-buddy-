@@ -6,6 +6,6 @@ OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 
 swiftc -swift-version 5 -parse-as-library \
-  Sources/Language.swift Sources/NowPlaying.swift Tests/LogicTests.swift \
+  Sources/Language.swift Sources/NowPlaying.swift Sources/Whisper.swift Sources/FastGemini.swift Tests/LogicTests.swift \
   -o "$OUT/logic-tests"
 "$OUT/logic-tests"

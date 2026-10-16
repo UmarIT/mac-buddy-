@@ -29,7 +29,7 @@ final class VoiceBuddy {
         self.model = model
         self.settings = settings
         listener.onPartial = { [weak self] text in self?.model.setVoice(.listening(text)) }
-        listener.onFinish = { [weak self] text in self?.heard(text) }
+        listener.onFinish = { [weak self] result in self?.received(result) }
         listener.onError = { [weak self] message in self?.answer(message, thenListen: false) }
         Speaker.shared.onDone = { [weak self] in self?.finishedSpeaking() }
     }
@@ -83,6 +83,30 @@ final class VoiceBuddy {
         listener.start(quiet: followUp, firstWait: followUp ? 6 : 7, locales: Lingo.recognizerLocales(settings.language))
     }
 
+    /// With a Groq key, the recording goes to Whisper (much better for Urdu, Punjabi and mixed
+    /// speech); Apple's text is the backup.
+    private func received(_ result: Heard) {
+        guard let audio = result.audio, Whisper.isAvailable else {
+            if result.text.isEmpty, let problem = result.problem, !followUp {
+                answer(problem, thenListen: false)
+            } else {
+                heard(result.text)
+            }
+            return
+        }
+        model.setVoice(.thinking)
+        Task { [weak self] in
+            let text = await Whisper.transcribe(audio, language: self?.settings.language ?? "auto")
+            guard let self, self.model.voice == .thinking else { return }
+            let best = (text?.isEmpty == false) ? text! : result.text
+            if best.isEmpty, let problem = result.problem, !self.followUp {
+                self.answer(problem, thenListen: false)
+            } else {
+                self.heard(best)
+            }
+        }
+    }
+
     private func heard(_ text: String) {
         let request = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !request.isEmpty else {
@@ -94,6 +118,19 @@ final class VoiceBuddy {
             return
         }
         let keepTalking = settings.keepConversation && !Self.isGoodbye(request)
+
+        // "Be quiet" / "chup karo": stop talking by itself. "You can talk again": back to normal.
+        if Self.matches(request, ["be quiet", "stop talking", "don't talk", "dont talk", "shut up", "chup", "chup karo",
+                                  "khamosh", "chup ho jao", "baat mat karo", "چپ", "خاموش"]) {
+            settings.chattiness = 0
+            answer("Okay, I'll stay quiet. Double-click me when you need me.", thenListen: false)
+            return
+        }
+        if Self.matches(request, ["you can talk again", "talk to me again", "start talking", "baat karo", "baatein karo"]) {
+            settings.chattiness = 1
+            answer("Yay! I'll chat now and then.", thenListen: false)
+            return
+        }
 
         // Simple things happen instantly, without using Gemini: open apps, play songs, volume, timers…
         if settings.instantCommands,
@@ -172,6 +209,11 @@ final class VoiceBuddy {
                 }
             }
         }
+    }
+
+    private static func matches(_ text: String, _ phrases: [String]) -> Bool {
+        let t = " " + text.lowercased().filter { $0.isLetter || $0 == " " || $0 == "'" } + " "
+        return phrases.contains { t.contains(" \($0) ") }
     }
 
     /// "Thanks", "bye", "that's all"… ends the conversation instead of listening again.

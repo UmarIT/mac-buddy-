@@ -22,7 +22,7 @@ enum Lingo {
         case "en": "Always reply in English."
         case "ur": "Always reply in Urdu."
         case "pa": "Always reply in Punjabi."
-        default: "The user may speak English, Urdu or Punjabi, often mixed and written in Roman letters. Reply in the same language they used."
+        default: "Reply in English, unless the user's message is in Urdu or Punjabi (in Urdu script or Roman letters); then reply in that language, in Roman letters."
         }
         guard language != "en" else { return which }
         return """

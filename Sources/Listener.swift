@@ -19,12 +19,23 @@ func voiceLog(_ message: String) {
     }
 }
 
-/// Listens to the microphone and turns speech into text. Stops by itself after a short pause.
+/// The result of one listen.
+struct Heard {
+    /// What Apple's recognizer understood ("" if nothing).
+    let text: String
+    /// The recording, when you actually spoke (for a better transcription with Whisper).
+    let audio: Data?
+    /// Why nothing was understood, when we can tell (e.g. Dictation is off).
+    let problem: String?
+}
+
+/// Listens to the microphone and turns speech into text. Stops by itself shortly after you stop
+/// talking (judged by the sound level, and by the words coming in).
 @MainActor
 final class Listener {
     var onPartial: ((String) -> Void)?
-    /// Called once per listen with what was heard ("" if nothing).
-    var onFinish: ((String) -> Void)?
+    /// Called once per listen.
+    var onFinish: ((Heard) -> Void)?
     var onError: ((String) -> Void)?
 
     private(set) var isListening = false
@@ -42,6 +53,14 @@ final class Listener {
     private var quiet = false
     private var firstWait: TimeInterval = 7
     private var locales: [String] = []
+
+    // Recording and voice-activity detection.
+    private let recorder = AudioRecorder()
+    private var vadTimer: Timer?
+    private var startedAt = Date()
+    private var lastLoud = Date()
+    private var noiseFloor = 0.0
+    private var spoke = false
 
     /// Asks for permission the first time, then starts listening. `quiet`: if nothing is said,
     /// finish silently (used when the buddy listens for your reply by itself).
@@ -112,7 +131,8 @@ final class Listener {
         }
         voiceLog("mic format: \(format.sampleRate) Hz, \(format.channelCount) channel(s)")
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(for: request))
+        recorder.start(sampleRate: format.sampleRate)
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(for: request, recorder: recorder))
 
         engine.prepare()
         do {
@@ -127,6 +147,13 @@ final class Listener {
 
         // Give up if nothing is said, and never listen for too long.
         restartSilenceTimer(after: firstWait)
+        startedAt = Date()
+        lastLoud = Date()
+        noiseFloor = 0
+        spoke = false
+        vadTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkVoiceActivity() }
+        }
         limitTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.stop() }
         }
@@ -143,6 +170,27 @@ final class Listener {
         if isFinal || error != nil { finish() }
     }
 
+    /// Ends the listen about a second after your voice stops (louder than the room's background).
+    private func checkVoiceActivity() {
+        guard isListening else { return }
+        let level = AudioLevel.shared.value
+        let now = Date()
+        if now.timeIntervalSince(startedAt) < 0.35 {   // measure the room first
+            noiseFloor = max(noiseFloor, level)
+            return
+        }
+        let threshold = min(0.75, max(0.3, noiseFloor + 0.18))
+        if level > threshold {
+            lastLoud = now
+            if !spoke {
+                spoke = true
+                silenceTimer?.invalidate()   // you started talking: no more "nothing said" timeout
+                voiceLog("speech started (level \(String(format: "%.2f", level)), threshold \(String(format: "%.2f", threshold)))")
+            }
+        }
+        if spoke, now.timeIntervalSince(lastLoud) > 1.0 { stop() }
+    }
+
     private func restartSilenceTimer(after seconds: TimeInterval) {
         silenceTimer?.invalidate()
         silenceTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
@@ -154,25 +202,24 @@ final class Listener {
         let heard = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         let peak = AudioLevel.shared.peak
         let error = lastError
-        voiceLog("finish: heard=\"\(heard)\" peak=\(String(format: "%.2f", peak)) error=\(error ?? "none")")
+        let audio = (spoke || !heard.isEmpty) ? recorder.wav() : nil
+        voiceLog("finish: heard=\"\(heard)\" peak=\(String(format: "%.2f", peak)) spoke=\(spoke) audio=\(audio?.count ?? 0)B error=\(error ?? "none")")
         teardown()
         guard heard.isEmpty, !quiet else {
-            onFinish?(heard)
+            onFinish?(Heard(text: heard, audio: audio, problem: nil))
             return
         }
-        // Nothing came through: say why, when we can tell.
+        // Nothing understood: say why, when we can tell (Whisper may still understand the recording).
         let lower = (error ?? "").lowercased()
+        var problem: String?
         if lower.contains("1101") || lower.contains("1700") || lower.contains("dictation") || lower.contains("siri") {
-            Self.openSettings("x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
-            onError?("I need Dictation to understand you. I opened Keyboard settings: turn on Dictation, then try again.")
+            problem = "I need Dictation to understand you. Turn on Dictation in System Settings, Keyboard, or add a free Groq key in my Voice settings."
         } else if peak < 0.12 {
-            onError?("I didn't hear anything. Check that the right microphone is selected in System Settings, Sound, Input, then try again.")
+            problem = "I didn't hear anything. Check that the right microphone is selected in System Settings, Sound, Input, then try again."
         } else if error != nil {
-            Self.openSettings("x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
-            onError?("I heard you but couldn't turn it into words. Make sure Dictation is on in Keyboard settings, then try again.")
-        } else {
-            onFinish?("")
+            problem = "I heard you but couldn't turn it into words. Make sure Dictation is on in Keyboard settings, or add a free Groq key in my Voice settings."
         }
+        onFinish?(Heard(text: "", audio: audio, problem: problem))
     }
 
     private func fail(_ message: String) {
@@ -185,6 +232,7 @@ final class Listener {
         AudioLevel.shared.reset()
         silenceTimer?.invalidate(); silenceTimer = nil
         limitTimer?.invalidate(); limitTimer = nil
+        vadTimer?.invalidate(); vadTimer = nil
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio(); request = nil
@@ -211,13 +259,15 @@ final class Listener {
         { value in DispatchQueue.main.async { MainActor.assumeIsolated { body(value) } } }
     }
 
-    nonisolated private static func tapBlock(for request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
+    nonisolated private static func tapBlock(for request: SFSpeechAudioBufferRecognitionRequest,
+                                             recorder: AudioRecorder) -> AVAudioNodeTapBlock {
         { buffer, _ in
             request.append(buffer)
-            // Loudness for the live voice wave in the bubble.
+            // Loudness for the live voice wave in the bubble, and the recording for Whisper.
             guard let samples = buffer.floatChannelData?[0] else { return }
             let n = Int(buffer.frameLength)
             guard n > 0 else { return }
+            recorder.append(samples, count: n)
             var sum: Float = 0
             for i in 0..<n { sum += samples[i] * samples[i] }
             AudioLevel.shared.push((sum / Float(n)).squareRoot())

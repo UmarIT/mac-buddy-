@@ -122,7 +122,7 @@ final class FastGemini {
     // MARK: Groq (OpenAI-compatible)
 
     nonisolated(unsafe) private static var groqModel: String?
-    private static let groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    private static let groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-20b"]
 
     private static func groqGenerate(turns: [(role: String, text: String)], system: String?, key: String) async -> Outcome {
         let started = Date()
@@ -131,6 +131,8 @@ final class FastGemini {
         if let system { messages.append(["role": "system", "content": system]) }
         messages += turns.map { ["role": $0.role == "model" ? "assistant" : "user", "content": $0.text] }
 
+        var lastStatus = 0
+        var lastDetail = ""
         for model in models {
             guard let url = URL(string: "https://api.groq.com/openai/v1/chat/completions") else { break }
             var request = URLRequest(url: url, timeoutInterval: 20)
@@ -158,13 +160,20 @@ final class FastGemini {
                 return .reply(answer)
             }
             let text = String(decoding: data, as: UTF8.self)
-            voiceLog("groq (\(model)) HTTP \(status): \(text.prefix(200))")
+            voiceLog("groq (\(model)) HTTP \(status): \(text.prefix(300))")
+            lastStatus = status
+            lastDetail = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])
+                .flatMap { $0["error"] as? [String: Any] }.flatMap { $0["message"] as? String } ?? ""
             if status == 401 { return .failed("Your Groq API key isn't working. Check it in my settings.") }
-            if status == 429 { continue }   // this model's limit is used up: try the smaller one
-            if status == 404 || status == 400 { continue }
-            return .failed("Groq had a problem answering. Please try again.")
+            if status == 403 { return .failed("Groq refused the request. It may not be available in your country, or the key is limited.") }
+            continue   // 400, 404, 413, 429, 5xx: try the next model
         }
-        return .failed("I've hit the Groq limit for now. Try again in a minute.")
+        switch lastStatus {
+        case 429: return .failed("I've hit the Groq limit for now. Try again in a minute.")
+        case 0: return .failed("I couldn't reach Groq.")
+        default:
+            return .failed("Groq couldn't answer\(lastDetail.isEmpty ? "" : ": " + String(lastDetail.prefix(80))).")
+        }
     }
 
     // MARK: Gemini

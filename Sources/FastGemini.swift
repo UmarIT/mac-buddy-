@@ -124,9 +124,47 @@ final class FastGemini {
     nonisolated(unsafe) private static var groqModel: String?
     private static let groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-20b"]
 
+    /// Asks Groq which models this key can use, best chat models first.
+    private static func groqAvailableModels(key: String) async -> [String] {
+        guard let url = URL(string: "https://api.groq.com/openai/v1/models") else { return [] }
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        guard let pair = try? await URLSession.shared.data(for: request),
+              let json = (try? JSONSerialization.jsonObject(with: pair.0)) as? [String: Any],
+              let list = json["data"] as? [[String: Any]] else { return [] }
+        let ids = list.compactMap { entry -> String? in
+            guard let id = entry["id"] as? String else { return nil }
+            if (entry["active"] as? Bool) == false { return nil }
+            let lower = id.lowercased()
+            // Skip speech, safety and other non-chat models.
+            let skip = ["whisper", "guard", "tts", "playai", "orpheus", "distil", "embed", "prompt-guard", "safeguard", "compound"]
+            return skip.contains { lower.contains($0) } ? nil : id
+        }
+        func score(_ id: String) -> Int {
+            let l = id.lowercased()
+            var s = 0
+            if l.contains("llama") { s += 30 }
+            if l.contains("70b") || l.contains("maverick") { s += 25 }
+            if l.contains("gpt-oss-20b") { s += 28 }
+            if l.contains("gpt-oss-120b") { s += 20 }
+            if l.contains("qwen") || l.contains("kimi") { s += 15 }
+            if l.contains("instant") || l.contains("8b") || l.contains("scout") { s += 10 }
+            if l.contains("preview") { s -= 5 }
+            return s
+        }
+        let sorted = ids.sorted { score($0) > score($1) }
+        voiceLog("groq models for this key: \(sorted.prefix(8).joined(separator: ", "))")
+        return sorted
+    }
+
     private static func groqGenerate(turns: [(role: String, text: String)], system: String?, key: String) async -> Outcome {
         let started = Date()
-        let models = groqModel.map { first in [first] + groqModels.filter { $0 != first } } ?? groqModels
+        var models = groqModel.map { first in [first] + groqModels.filter { $0 != first } } ?? groqModels
+        if groqModel == nil {
+            // Use what this key actually has; the default names are only a fallback.
+            let available = await groqAvailableModels(key: key)
+            if !available.isEmpty { models = Array(available.prefix(4)) }
+        }
         var messages: [[String: String]] = []
         if let system { messages.append(["role": "system", "content": system]) }
         messages += turns.map { ["role": $0.role == "model" ? "assistant" : "user", "content": $0.text] }
@@ -165,6 +203,7 @@ final class FastGemini {
             lastDetail = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])
                 .flatMap { $0["error"] as? [String: Any] }.flatMap { $0["message"] as? String } ?? ""
             if status == 401 { return .failed("Your Groq API key isn't working. Check it in my settings.") }
+            if status == 404, groqModel == model { groqModel = nil }   // the saved model went away: look again next time
             if status == 403 { return .failed("Groq refused the request. It may not be available in your country, or the key is limited.") }
             continue   // 400, 404, 413, 429, 5xx: try the next model
         }

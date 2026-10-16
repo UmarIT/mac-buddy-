@@ -18,6 +18,8 @@ struct SettingsView: View {
                 TabView {
                     AppearanceTab(settings: settings)
                         .tabItem { Label("Appearance", systemImage: "paintpalette") }
+                    VoiceTab(settings: settings)
+                        .tabItem { Label("Voice", systemImage: "waveform") }
                     BehaviorTab(settings: settings, onResetPosition: onResetPosition)
                         .tabItem { Label("Behavior", systemImage: "figure.wave") }
                     ClaudeTab(settings: settings, model: model)
@@ -179,7 +181,6 @@ private struct BehaviorTab: View {
     @ObservedObject var settings: BuddySettings
     let onResetPosition: () -> Void
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var apiKey = GeminiKey.value ?? ""
 
     var body: some View {
         Form {
@@ -221,49 +222,6 @@ private struct BehaviorTab: View {
                 Text("Music")
             } footer: {
                 Text("Reads the title and address of your tabs in Safari, Chrome, Brave or Edge, and what's playing in Music or Spotify. It dances, nods along, gets sad or romantic, listens quietly to Quran, cheers for cricket and other sports, and works along with you on work sites and apps. It doesn't record audio or look at your screen. macOS asks once per app for permission.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section {
-                Toggle("Talk to Buddy (double-click it or press \(HotKey.defaultLabel))", isOn: $settings.voiceAssistant)
-                SecureField("Gemini API key (free, makes answers much faster)", text: $apiKey)
-                    .onChange(of: apiKey) { _, key in GeminiKey.save(key) }
-                Link("Get a free Gemini API key", destination: URL(string: "https://aistudio.google.com/apikey")!)
-                    .font(.caption)
-                Picker("Language", selection: $settings.language) {
-                    Text("Auto: English, Urdu & Punjabi").tag("auto")
-                    Text("English").tag("en")
-                    Text("Urdu").tag("ur")
-                    Text("Punjabi").tag("pa")
-                }
-                .disabled(!settings.voiceAssistant)
-                Toggle("Let Gemini do things on my Mac", isOn: $settings.geminiActs)
-                    .disabled(!settings.voiceAssistant)
-                Toggle("Do simple commands instantly (open apps, play songs, volume, timers)", isOn: $settings.instantCommands)
-                    .disabled(!settings.voiceAssistant)
-            } header: {
-                Text("Voice assistant (Gemini)")
-            } footer: {
-                Text(settings.geminiActs
-                     ? "Buddy uses Gemini through the Antigravity CLI (agy), signed in with your Google account. Gemini can open apps, control Music, Notes, Reminders and more, and run commands without asking first. Speech can be misheard, so turn this off if you're unsure."
-                     : "Buddy uses Gemini through the Antigravity CLI (agy), signed in with your Google account. With doing things turned off, Gemini only answers.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section {
-                Picker("Talks by itself", selection: $settings.chattiness) {
-                    Text("Never").tag(0)
-                    Text("Now and then").tag(1)
-                    Text("Normal").tag(2)
-                    Text("Chatty").tag(3)
-                }
-                Toggle("Keep the conversation going (listens for your reply)", isOn: $settings.keepConversation)
-                Toggle("Let Gemini write what it says (more personal)", isOn: $settings.geminiRemarks)
-                    .disabled(settings.chattiness == 0)
-            } header: {
-                Text("Personal companion")
-            } footer: {
-                Text("Buddy greets you, chats about what you're watching or doing, reminds you to take breaks and to sleep when it's late. It stays quiet during Quran recitation and calls. When it asks you something, it listens for your answer; if you don't reply, it stops listening.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -387,5 +345,69 @@ private struct SliderRow: View {
                     .frame(width: 44, alignment: .trailing)
             }
         }
+    }
+}
+
+@MainActor
+private struct VoiceTab: View {
+    @ObservedObject var settings: BuddySettings
+    @State private var apiKey = GeminiKey.value ?? ""
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField("Gemini API key", text: $apiKey, prompt: Text("Paste your key here"))
+                    .onChange(of: apiKey) { _, key in GeminiKey.save(key) }
+                Link("Get a free Gemini API key →", destination: URL(string: "https://aistudio.google.com/apikey")!)
+            } header: {
+                Text("Speed")
+            } footer: {
+                Text(apiKey.isEmpty
+                     ? "Without a key, every answer goes through the slower Antigravity agent. With a free key, chatting answers in about a second."
+                     : "Key saved in your Keychain. Chatting now goes straight to Gemini.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Talk to Buddy (double-click it or press \(HotKey.defaultLabel))", isOn: $settings.voiceAssistant)
+                Picker("Language", selection: $settings.language) {
+                    Text("Auto: English, Urdu & Punjabi").tag("auto")
+                    Text("English").tag("en")
+                    Text("Urdu").tag("ur")
+                    Text("Punjabi").tag("pa")
+                }
+                .disabled(!settings.voiceAssistant)
+                Toggle("Let Gemini do things on my Mac", isOn: $settings.geminiActs)
+                    .disabled(!settings.voiceAssistant)
+                Toggle("Do simple commands instantly (open apps, play songs, volume, timers)", isOn: $settings.instantCommands)
+                    .disabled(!settings.voiceAssistant)
+            } header: {
+                Text("Voice assistant (Gemini)")
+            } footer: {
+                Text(settings.geminiActs
+                     ? "Buddy uses Gemini through the Antigravity CLI (agy), signed in with your Google account. Gemini can open apps, control Music, Notes, Reminders and more, and run commands without asking first. Speech can be misheard, so turn this off if you're unsure."
+                     : "Buddy uses Gemini through the Antigravity CLI (agy), signed in with your Google account. With doing things turned off, Gemini only answers.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                Picker("Talks by itself", selection: $settings.chattiness) {
+                    Text("Never").tag(0)
+                    Text("Now and then").tag(1)
+                    Text("Normal").tag(2)
+                    Text("Chatty").tag(3)
+                }
+                Toggle("Keep the conversation going (listens for your reply)", isOn: $settings.keepConversation)
+                Toggle("Let Gemini write what it says (more personal)", isOn: $settings.geminiRemarks)
+                    .disabled(settings.chattiness == 0)
+            } header: {
+                Text("Personal companion")
+            } footer: {
+                Text("Buddy greets you, chats about what you're watching or doing, reminds you to take breaks and to sleep when it's late. It stays quiet during Quran recitation and calls. When it asks you something, it listens for your answer; if you don't reply, it stops listening.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+        }
+        .formStyle(.grouped)
     }
 }

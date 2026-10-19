@@ -120,7 +120,7 @@ final class GeminiJob: @unchecked Sendable {
         let tool = cursor ? AgyLocator.find(["cursor-agent", "agent"]) : AgyLocator.find(["agy"])
         guard let agy = tool else {
             return Reply(text: cursor
-                         ? "I need the Cursor agent to think. Open Terminal, install the Cursor CLI, and run cursor-agent login. Then ask me again."
+                         ? "I need the Cursor agent to think. Open Terminal, install the Cursor CLI, and run agent login. Then ask me again."
                          : "I need Gemini to think. Open Terminal, install the Antigravity CLI, and run agy once to sign in with your Google account.",
                          conversation: nil)
         }
@@ -216,7 +216,7 @@ final class GeminiJob: @unchecked Sendable {
         if lower.contains("authentication") || lower.contains("sign in") || lower.contains("login") || lower.contains("log in")
             || lower.contains("not logged") || lower.contains("api key") {
             return (Reply(text: cursor
-                          ? "The Cursor agent isn't logged in. Open Terminal, run cursor-agent login, then ask me again."
+                          ? "The Cursor agent isn't logged in. Open Terminal, run agent login, then ask me again."
                           : "Gemini isn't signed in yet. Open Terminal, run agy, and sign in with your Google account. Then ask me again.",
                           conversation: nil), false, false)
         }
@@ -295,7 +295,7 @@ enum AgyLocator {
         let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/zsh"
         let p = Process()
         p.executableURL = URL(fileURLWithPath: shell)
-        let lookups = names.filter { $0 != "agent" }
+        let lookups = names
             .map { "printf '__MB_CMD__%s\\n' \"$(command -v \($0) 2>/dev/null)\"" }.joined(separator: "; ")
         p.arguments = ["-ilc", "printf '\\n__MB_PATH__%s\\n' \"$PATH\"; " + lookups]
         let out = Pipe()

@@ -144,7 +144,7 @@ final class BuddySettings: ObservableObject {
     @Published var cuteVoice = true { didSet { save(cuteVoice, "cuteVoice") } }
     /// "fast": Groq/Gemini API keys (Antigravity for actions). "cursor": Cursor's agent for everything.
     @Published var brain = "fast" { didSet { save(brain, "brain") } }
-    /// Cursor model name (empty = Cursor's default), e.g. a Claude, GPT, Gemini or Grok model from `cursor-agent --list-models`.
+    /// Cursor model name (empty = Cursor's default), e.g. a Claude, GPT, Gemini or Grok model from `agent models`.
     @Published var cursorModel = "" { didSet { save(cursorModel, "cursorModel") } }
     /// After the buddy speaks, listen for your reply by itself.
     @Published var keepConversation = true { didSet { save(keepConversation, "keepConversation") } }

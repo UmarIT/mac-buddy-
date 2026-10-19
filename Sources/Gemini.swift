@@ -6,14 +6,19 @@ import Foundation
 @MainActor
 final class GeminiBrain {
     private var conversationID: String?
+    private var conversationWithCursor = false
     private var lastUsed = Date.distantPast
     private var current: GeminiJob?
 
-    func ask(_ request: String, canAct: Bool, language: String, completion: @escaping @MainActor (String) -> Void) {
-        if Date().timeIntervalSince(lastUsed) > 15 * 60 { conversationID = nil }
+    /// `cursor`: use the Cursor agent (your Cursor plan) instead of Antigravity.
+    func ask(_ request: String, canAct: Bool, language: String, cursor: Bool = false, cursorModel: String = "",
+             completion: @escaping @MainActor (String) -> Void) {
+        if Date().timeIntervalSince(lastUsed) > 15 * 60 || conversationWithCursor != cursor { conversationID = nil }
+        conversationWithCursor = cursor
         lastUsed = Date()
         current?.cancel()
-        let job = GeminiJob(request: request, conversation: conversationID, canAct: canAct, language: language)
+        let job = GeminiJob(request: request, conversation: conversationID, canAct: canAct, language: language,
+                            cursor: cursor, cursorModel: cursorModel)
         current = job
         Task.detached {
             let reply = job.run()
@@ -33,8 +38,9 @@ final class GeminiBrain {
 
     /// A one-off line for the buddy to say on its own (not part of the chat). nil if Gemini isn't
     /// available or fails, so the caller can use a built-in line instead.
-    func remark(_ prompt: String, completion: @escaping @MainActor (String?) -> Void) {
-        let job = GeminiJob(request: prompt, conversation: nil, canAct: false, raw: true)
+    func remark(_ prompt: String, cursor: Bool = false, cursorModel: String = "",
+                completion: @escaping @MainActor (String?) -> Void) {
+        let job = GeminiJob(request: prompt, conversation: nil, canAct: false, raw: true, cursor: cursor, cursorModel: cursorModel)
         Task.detached {
             let reply = job.run()
             await MainActor.run { completion(reply.ok ? reply.text : nil) }
@@ -81,13 +87,19 @@ final class GeminiJob: @unchecked Sendable {
     /// Send the request exactly as given: no persona, no conversation, never acts.
     private let raw: Bool
     private let language: String
+    /// Run Cursor's agent (`cursor-agent`) instead of Antigravity (`agy`).
+    private let cursor: Bool
+    private let cursorModel: String
     private let lock = NSLock()
     private var process: Process?
     private var cancelled = false
 
-    init(request: String, conversation: String?, canAct: Bool, raw: Bool = false, language: String = "auto") {
+    init(request: String, conversation: String?, canAct: Bool, raw: Bool = false, language: String = "auto",
+         cursor: Bool = false, cursorModel: String = "") {
         self.request = request
         self.language = language
+        self.cursor = cursor
+        self.cursorModel = cursorModel.trimmingCharacters(in: .whitespaces)
         self.conversation = conversation
         self.canAct = canAct && !raw
         self.raw = raw
@@ -105,8 +117,11 @@ final class GeminiJob: @unchecked Sendable {
     }
 
     func run() -> Reply {
-        guard let agy = AgyLocator.find() else {
-            return Reply(text: "I need Gemini to think. Open Terminal, install the Antigravity CLI, and run agy once to sign in with your Google account.",
+        let tool = cursor ? AgyLocator.find(["cursor-agent", "agent"]) : AgyLocator.find(["agy"])
+        guard let agy = tool else {
+            return Reply(text: cursor
+                         ? "I need the Cursor agent to think. Open Terminal, install the Cursor CLI, and run cursor-agent login. Then ask me again."
+                         : "I need Gemini to think. Open Terminal, install the Antigravity CLI, and run agy once to sign in with your Google account.",
                          conversation: nil)
         }
         let started = Date()
@@ -119,7 +134,7 @@ final class GeminiJob: @unchecked Sendable {
         if result.retryFresh, conversation != nil, !isCancelled {
             result = attempt(agy, conversation: nil, fast: true)
         }
-        voiceLog("gemini \(raw ? "remark" : "reply") took \(String(format: "%.1f", Date().timeIntervalSince(started)))s ok=\(result.reply.ok)")
+        voiceLog("\(cursor ? "cursor" : "gemini") \(raw ? "remark" : "reply") took \(String(format: "%.1f", Date().timeIntervalSince(started)))s ok=\(result.reply.ok)")
         return result.reply
     }
 
@@ -130,17 +145,28 @@ final class GeminiJob: @unchecked Sendable {
             : conversation == nil
             ? "\(Self.persona)\n\n\(Lingo.rules(language))\n\nThe user said: \(request)"
             : "The user said: \(request)"
-        var args = ["-p", prompt, "--output-format", "json"]
-        if let conversation { args += ["--conversation", conversation] }
-        if canAct { args.append("--dangerously-skip-permissions") }   // lets it run commands without asking
-        if fast { args += ["--effort", "low"] }   // much quicker answers; plenty for a chatty assistant
+        // A small empty folder: running in the home folder makes the agent look through all your files first.
+        let workspace = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mac-buddy/workspace")
+        try? FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+
+        var args: [String]
+        if cursor {
+            // Cursor agent: ask mode only answers; --force lets it run commands and edit files without asking.
+            args = ["-p", "--output-format", "json", "--trust", "--workspace", workspace.path]
+            if let conversation { args += ["--resume", conversation] }
+            args += canAct ? ["--force"] : ["--mode", "ask"]
+            if !cursorModel.isEmpty { args += ["--model", cursorModel] }
+            args.append(prompt.hasPrefix("-") ? " " + prompt : prompt)
+        } else {
+            args = ["-p", prompt, "--output-format", "json"]
+            if let conversation { args += ["--conversation", conversation] }
+            if canAct { args.append("--dangerously-skip-permissions") }   // lets it run commands without asking
+            if fast { args += ["--effort", "low"] }   // much quicker answers; plenty for a chatty assistant
+        }
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: agy.path)
         p.arguments = args
-        // A small empty folder: running in the home folder makes the agent look through all your files first.
-        let workspace = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mac-buddy/workspace")
-        try? FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
         p.currentDirectoryURL = workspace
         p.environment = agy.environment
 
@@ -173,19 +199,29 @@ final class GeminiJob: @unchecked Sendable {
         p.waitUntilExit()
         if isCancelled { return (Reply(text: "", conversation: nil), false, false) }
 
-        // {"conversation_id": "...", "status": "SUCCESS", "response": "...", "error": ...}
+        // agy:    {"conversation_id": "...", "status": "SUCCESS", "response": "...", "error": ...}
+        // Cursor: {"type": "result", "is_error": false, "result": "...", "session_id": "..."}
         let json = Self.lastJSONObject(in: out)
-        let id = json?["conversation_id"] as? String
+        let id = (json?["conversation_id"] as? String) ?? (json?["session_id"] as? String)
         let status = (json?["status"] as? String)?.uppercased()
-        if let text = json?["response"] as? String, !text.isEmpty, status == nil || status == "SUCCESS" {
+        let isError = (json?["is_error"] as? Bool) == true
+        let answer = (json?["response"] as? String) ?? (json?["result"] as? String)
+        if let text = answer, !text.isEmpty, !isError, status == nil || status == "SUCCESS" {
             return (Reply(text: text.trimmingCharacters(in: .whitespacesAndNewlines), conversation: id, ok: true), false, false)
         }
 
         let err = ((try? String(contentsOf: errURL, encoding: .utf8)) ?? "") + " "
             + String(describing: json?["error"] ?? "") + " " + String(decoding: out, as: UTF8.self)
         let lower = err.lowercased()
-        if lower.contains("authentication") || lower.contains("sign in") || lower.contains("login") || lower.contains("log in") {
-            return (Reply(text: "Gemini isn't signed in yet. Open Terminal, run agy, and sign in with your Google account. Then ask me again.",
+        if lower.contains("authentication") || lower.contains("sign in") || lower.contains("login") || lower.contains("log in")
+            || lower.contains("not logged") || lower.contains("api key") {
+            return (Reply(text: cursor
+                          ? "The Cursor agent isn't logged in. Open Terminal, run cursor-agent login, then ask me again."
+                          : "Gemini isn't signed in yet. Open Terminal, run agy, and sign in with your Google account. Then ask me again.",
+                          conversation: nil), false, false)
+        }
+        if cursor, !cursorModel.isEmpty, lower.contains("model") {
+            return (Reply(text: "Cursor doesn't know the model \(cursorModel). Check the name in my Voice settings, or leave it empty.",
                           conversation: nil), false, false)
         }
         if lower.contains("quota") || lower.contains("rate limit") || lower.contains("resource_exhausted") || lower.contains("429") {
@@ -224,14 +260,17 @@ enum AgyLocator {
     struct Found: Sendable { let path: String; let environment: [String: String] }
 
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var cached: Found?
 
-    static func find() -> Found? {
+    nonisolated(unsafe) private static var cache: [String: Found] = [:]
+
+    /// The first of `names` found, e.g. ["agy"] or ["cursor-agent", "agent"].
+    static func find(_ names: [String] = ["agy"]) -> Found? {
         lock.lock(); defer { lock.unlock() }
-        if let cached, FileManager.default.isExecutableFile(atPath: cached.path) { return cached }
+        let key = names.joined(separator: ",")
+        if let hit = cache[key], FileManager.default.isExecutableFile(atPath: hit.path) { return hit }
 
         let home = NSHomeDirectory()
-        let shell = askShell()
+        let shell = askShell(names)
         var dirs = (shell.path ?? "").split(separator: ":").map(String.init)
         dirs += ["\(home)/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
         var seen = Set<String>()
@@ -240,39 +279,43 @@ enum AgyLocator {
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = dirs.joined(separator: ":")
 
-        var candidates: [String] = []
-        if let p = shell.agy { candidates.append(p) }
-        candidates += dirs.map { "\($0)/agy" }
+        var candidates: [String] = shell.found
+        for name in names {
+            // "agent" is a common name, so only trust it from Cursor's own install folder.
+            candidates += name == "agent" ? ["\(home)/.local/bin/agent"] : dirs.map { "\($0)/\(name)" }
+        }
         guard let path = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
         let found = Found(path: path, environment: env)
-        cached = found
+        cache[key] = found
         return found
     }
 
-    /// Runs your login shell once to read its PATH and where `agy` lives.
-    private static func askShell() -> (path: String?, agy: String?) {
+    /// Runs your login shell to read its PATH and where the commands live.
+    private static func askShell(_ names: [String]) -> (path: String?, found: [String]) {
         let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/zsh"
         let p = Process()
         p.executableURL = URL(fileURLWithPath: shell)
-        p.arguments = ["-ilc", "printf '\\n__MB_PATH__%s\\n' \"$PATH\"; printf '__MB_AGY__%s\\n' \"$(command -v agy 2>/dev/null)\""]
+        let lookups = names.filter { $0 != "agent" }
+            .map { "printf '__MB_CMD__%s\\n' \"$(command -v \($0) 2>/dev/null)\"" }.joined(separator: "; ")
+        p.arguments = ["-ilc", "printf '\\n__MB_PATH__%s\\n' \"$PATH\"; " + lookups]
         let out = Pipe()
         p.standardOutput = out
         p.standardError = FileHandle.nullDevice
         p.standardInput = FileHandle.nullDevice
-        do { try p.run() } catch { return (nil, nil) }
+        do { try p.run() } catch { return (nil, []) }
         DispatchQueue.global().asyncAfter(deadline: .now() + 8) { [weak p] in
             if let p, p.isRunning { p.terminate() }
         }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        var path: String?, agy: String?
+        var path: String?, found: [String] = []
         for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
             if let r = line.range(of: "__MB_PATH__") { path = String(line[r.upperBound...]) }
-            if let r = line.range(of: "__MB_AGY__") {
+            if let r = line.range(of: "__MB_CMD__") {
                 let v = String(line[r.upperBound...])
-                if v.hasPrefix("/") { agy = v }   // ignore aliases
+                if v.hasPrefix("/") { found.append(v) }   // ignore aliases
             }
         }
-        return (path, agy)
+        return (path, found)
     }
 }

@@ -142,6 +142,10 @@ final class BuddySettings: ObservableObject {
     /// Identifier of the English voice; "" picks the most natural installed one.
     @Published var voiceID = "" { didSet { save(voiceID, "voiceID") } }
     @Published var cuteVoice = true { didSet { save(cuteVoice, "cuteVoice") } }
+    /// "fast": Groq/Gemini API keys (Antigravity for actions). "cursor": Cursor's agent for everything.
+    @Published var brain = "fast" { didSet { save(brain, "brain") } }
+    /// Cursor model name (empty = Cursor's default), e.g. a Claude, GPT, Gemini or Grok model from `cursor-agent --list-models`.
+    @Published var cursorModel = "" { didSet { save(cursorModel, "cursorModel") } }
     /// After the buddy speaks, listen for your reply by itself.
     @Published var keepConversation = true { didSet { save(keepConversation, "keepConversation") } }
     /// Let Gemini write what the buddy says by itself (otherwise built-in lines).
@@ -189,6 +193,8 @@ final class BuddySettings: ObservableObject {
         personality = v("personality", "friendly")
         voiceID = v("voiceID", "")
         cuteVoice = v("cuteVoice", true)
+        brain = v("brain", "fast")
+        cursorModel = v("cursorModel", "")
         keepConversation = v("keepConversation", true)
         geminiRemarks = v("geminiRemarks", true)
         showBubble = v("showBubble", true)

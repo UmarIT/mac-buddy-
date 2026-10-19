@@ -142,7 +142,7 @@ final class VoiceBuddy {
 
         // Fast path: chat straight with the Gemini API (about a second). Only requests that need
         // doing something on the Mac go to the slower agent.
-        if FastGemini.isAvailable {
+        if settings.brain != "cursor", FastGemini.isAvailable {
             fast.chat(request, system: FastGemini.chatSystem(language: settings.language, canAct: settings.geminiActs)) { [weak self] outcome in
                 guard let self, self.model.voice == .thinking else { return }
                 switch outcome {
@@ -161,11 +161,23 @@ final class VoiceBuddy {
 
     /// The Antigravity agent: slower, but it can act on the Mac.
     private func askAgent(_ request: String, keepTalking: Bool) {
-        if !FastGemini.isAvailable || settings.geminiActs {
+        let cursor = settings.brain == "cursor"
+        if !cursor, FastGemini.isAvailable, settings.geminiActs {
             // A quick "on it" so you know it's working while the agent starts.
-            if FastGemini.isAvailable { Speaker.shared.say(Self.onIt(settings.language)) }
+            Speaker.shared.say(Self.onIt(settings.language))
+        } else {
+            // The agent takes a few seconds: say a little "hmm" if it's still thinking after 3 s.
+            let asked = Date()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.model.voice == .thinking, !Speaker.shared.isSpeaking,
+                          Date().timeIntervalSince(asked) >= 2.9 else { return }
+                    Speaker.shared.say(["Hmm, let me think.", "One sec.", "Hmm."].randomElement()!)
+                }
+            }
         }
-        gemini.ask(request, canAct: settings.geminiActs, language: settings.language) { [weak self] reply in
+        gemini.ask(request, canAct: settings.geminiActs, language: settings.language,
+                   cursor: cursor, cursorModel: settings.cursorModel) { [weak self] reply in
             guard let self, self.model.voice == .thinking else { return }
             self.fast.remember(user: request, reply: Lingo.split(reply).show)
             self.answer(reply, thenListen: keepTalking)

@@ -183,10 +183,10 @@ final class Companion {
             let text = (line?.isEmpty == false && line!.count < 600) ? line! : fallback
             self.voice.speakUp(text, invitesReply: asks || text.hasSuffix("?"))
         }
-        if FastGemini.isAvailable {
+        if settings.brain != "cursor", FastGemini.isAvailable {
             Task { finish(await FastGemini.oneShot(prompt)) }   // about a second
         } else {
-            voice.gemini.remark(prompt, completion: finish)
+            voice.gemini.remark(prompt, cursor: settings.brain == "cursor", cursorModel: settings.cursorModel, completion: finish)
         }
     }
 }

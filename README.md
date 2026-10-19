@@ -106,6 +106,15 @@ agy        # opens your browser once to sign in with Google, then type /exit
 
 **Make it fast (recommended):** get a free **Groq** API key at [console.groq.com/keys](https://console.groq.com/keys) (fastest) and/or a free Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and paste them in **Settings → Voice** (or run `~/Applications/MacBuddy.app/Contents/MacOS/MacBuddy --set-groq-key YOUR_KEY` / `--set-gemini-key YOUR_KEY`). With a Groq key, chatting goes to Groq first and falls back to Gemini, and what you say is transcribed by Groq's Whisper, which understands Urdu, Punjabi and mixed speech much better than macOS's built-in recognizer. Chatting then goes straight to Gemini and answers in about a second; only requests to *do* something on your Mac use the slower Antigravity agent. The key is stored in your macOS Keychain.
 
+**Smartest answers (Cursor plan):** install Cursor's command-line agent and log in once, then pick **Brain → Cursor** in **Settings → Voice** (optionally type a model name, e.g. one listed by `cursor-agent --list-models`):
+
+```bash
+curl https://cursor.com/install -fsS | bash
+cursor-agent login
+```
+
+Answers then come from your Cursor plan's models. They're smarter but take a few seconds; the buddy says "hmm" while it thinks.
+
 Then double-click the buddy and speak. The first time, click **Allow** for **Microphone** and **Speech Recognition** (and for any app Gemini controls, such as Notes or Reminders).
 
 > [!WARNING]

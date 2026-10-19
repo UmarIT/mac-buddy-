@@ -58,7 +58,8 @@ final class FastGemini {
     private var task: Task<Void, Never>?
     /// The first model that worked, so later requests go straight to it.
     nonisolated(unsafe) private static var workingModel: String?
-    private static let models = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-flash-latest"]
+    // Smarter Flash first (still free and fast), then the lighter ones.
+    private static let models = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
 
     static var isAvailable: Bool { GroqKey.value != nil || GeminiKey.value != nil }
 

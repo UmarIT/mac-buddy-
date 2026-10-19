@@ -374,8 +374,15 @@ private struct VoiceTab: View {
                 SecureField("Gemini API key", text: $apiKey, prompt: Text("Paste your key here"))
                     .onChange(of: apiKey) { _, key in GeminiKey.save(key) }
                 Link("Get a free Gemini API key →", destination: URL(string: "https://aistudio.google.com/apikey")!)
+                Picker("Brain", selection: $settings.brain) {
+                    Text("Fast & free (Groq / Gemini key)").tag("fast")
+                    Text("Cursor (smartest, uses your Cursor plan)").tag("cursor")
+                }
+                if settings.brain == "cursor" {
+                    TextField("Cursor model", text: $settings.cursorModel, prompt: Text("Default (leave empty)"))
+                }
             } header: {
-                Text("Speed")
+                Text("Brain")
             } footer: {
                 Text(groqKey.isEmpty && apiKey.isEmpty
                      ? "Without a key, every answer goes through the slower Antigravity agent. Add a free Groq or Gemini key and chatting answers in about a second."

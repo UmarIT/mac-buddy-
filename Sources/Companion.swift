@@ -168,11 +168,12 @@ final class Companion {
         }
         waitingForGemini = true
         let prompt = """
-        You are Mac Buddy, a cute little companion who lives on \(name)'s Mac screen and is their close, caring friend. \
+        You are Mac Buddy, a cute little companion who lives on \(name)'s Mac screen and is their close friend. \
+        \(Personality.tone()) \
         Something just happened: \(event) \
-        Say ONE short, warm, casual sentence to \(name) about it, like a friend sitting next to them \
+        Say ONE short sentence to \(name) about it, like a friend sitting next to them \
         (at most 18 words, no emoji, no quotes, no markdown). \
-        \(asks ? "End with a light, friendly question." : "Don't ask a question.") \
+        \(asks ? "End with a light question." : "Don't ask a question.") \
         \(Lingo.rules(settings.language == "auto" ? "en" : settings.language))
         Reply with only that sentence\(settings.language == "en" || settings.language == "auto" ? "" : " (in the SHOW/SAY format)").
         """

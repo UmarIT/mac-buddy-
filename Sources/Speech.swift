@@ -35,9 +35,10 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
         isSpeaking = true
         wordStarted = Date()
         let utterance = AVSpeechUtterance(string: clean)
-        utterance.pitchMultiplier = 1.2   // a little higher, to suit a small buddy
+        let cute = UserDefaults.standard.object(forKey: "buddy.cuteVoice") as? Bool ?? true
+        utterance.pitchMultiplier = cute ? 1.2 : 1.0   // a little higher suits a small buddy
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.06   // a touch quicker
-        if let voice = Self.voice(for: clean) { utterance.voice = voice }
+        utterance.voice = Self.voice(for: clean) ?? Self.englishVoice
         currentID = ObjectIdentifier(utterance)
         synth.speak(utterance)
     }
@@ -108,6 +109,34 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
                 if self.currentID == id { self.isSpeaking = false }
             }
         }
+    }
+
+    /// The English voice: the one picked in Settings, else the most natural one installed
+    /// (Premium, then Enhanced, then the default).
+    static var englishVoice: AVSpeechSynthesisVoice? {
+        if let id = UserDefaults.standard.string(forKey: "buddy.voiceID"), !id.isEmpty,
+           let chosen = AVSpeechSynthesisVoice(identifier: id) {
+            return chosen
+        }
+        return englishVoices.first
+    }
+
+    /// Installed English voices, most natural first.
+    static var englishVoices: [AVSpeechSynthesisVoice] {
+        func rank(_ v: AVSpeechSynthesisVoice) -> Int {
+            var r = 0
+            switch v.quality {
+            case .premium: r += 300
+            case .enhanced: r += 200
+            default: r += 0
+            }
+            if v.language == "en-US" { r += 30 } else if v.language == "en-GB" { r += 20 } else if v.language == "en-IN" { r += 15 }
+            if v.voiceTraits.contains(.isNoveltyVoice) { r -= 500 }
+            return r
+        }
+        return AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("en") }
+            .sorted { rank($0) > rank($1) }
     }
 
     /// Hindi voice for Devanagari (Urdu/Punjabi replies), an Urdu voice for Urdu script if one is

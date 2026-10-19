@@ -83,3 +83,27 @@ enum Lingo {
         return text
     }
 }
+
+/// How the buddy talks. Stored as "buddy.personality" in UserDefaults (see BuddySettings).
+enum Personality {
+    static var current: String { UserDefaults.standard.string(forKey: "buddy.personality") ?? "friendly" }
+
+    static var userName: String { NSFullUserName().split(separator: " ").first.map(String.init) ?? "friend" }
+
+    /// The tone part of the prompt.
+    static func tone(_ style: String = current) -> String {
+        switch style {
+        case "witty":
+            return """
+            Your personality is witty, cheeky and a little sarcastic, like a funny friend who loves banter: \
+            make clever jokes, tease them playfully, have bold, honest opinions instead of sitting on the fence, \
+            and never sound preachy, corporate or overly polite. Keep it good-natured: never mean, hurtful, \
+            crude or offensive, and drop the jokes when they're sad or asking about something serious.
+            """
+        case "chill":
+            return "Your personality is calm, relaxed and laid-back. Keep things short and easygoing."
+        default:
+            return "Talk warmly and casually, like a close, caring friend."
+        }
+    }
+}

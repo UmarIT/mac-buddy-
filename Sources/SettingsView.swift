@@ -1,3 +1,4 @@
+import AVFoundation
 import ServiceManagement
 import SwiftUI
 
@@ -351,6 +352,16 @@ private struct SliderRow: View {
 @MainActor
 private struct VoiceTab: View {
     @ObservedObject var settings: BuddySettings
+
+    static func label(_ voice: AVSpeechSynthesisVoice) -> String {
+        let quality: String
+        switch voice.quality {
+        case .premium: quality = " · Premium"
+        case .enhanced: quality = " · Enhanced"
+        default: quality = ""
+        }
+        return "\(voice.name) (\(voice.language))\(quality)"
+    }
     @State private var apiKey = GeminiKey.value ?? ""
     @State private var groqKey = GroqKey.value ?? ""
 
@@ -387,6 +398,23 @@ private struct VoiceTab: View {
                     .disabled(!settings.voiceAssistant)
                 Toggle("Do simple commands instantly (open apps, play songs, volume, timers)", isOn: $settings.instantCommands)
                     .disabled(!settings.voiceAssistant)
+                Picker("Personality", selection: $settings.personality) {
+                    Text("Friendly").tag("friendly")
+                    Text("Witty & sarcastic (Grok-style)").tag("witty")
+                    Text("Chill").tag("chill")
+                }
+                Picker("Voice", selection: $settings.voiceID) {
+                    Text("Most natural installed").tag("")
+                    ForEach(Speaker.englishVoices, id: \.identifier) { voice in
+                        Text(VoiceTab.label(voice)).tag(voice.identifier)
+                    }
+                }
+                Toggle("Cute high-pitched voice", isOn: $settings.cuteVoice)
+                Button("Hear a sample") {
+                    Speaker.shared.say(settings.personality == "witty"
+                        ? "Oh, you want to hear me talk? Bold move. Fine, here I am, as charming as ever."
+                        : "Hi! This is how I sound. Ask me anything!")
+                }
             } header: {
                 Text("Voice assistant (Gemini)")
             } footer: {
